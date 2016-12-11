@@ -43,6 +43,8 @@ clsRasterData<T>::clsRasterData(string rstFileName)
     else
         ReadFromGDAL(rstFileName);
 }
+/// Initialization function based on MongoDB
+#ifdef USEMONGO
 template<typename T>
 clsRasterData<T>::clsRasterData(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData<T> *templateRaster)
 {
@@ -54,6 +56,7 @@ clsRasterData<T>::clsRasterData(mongoc_gridfs_t *gfs, const char *remoteFilename
     m_raster2DData = NULL;
     ReadFromMongoDB(gfs, remoteFilename, templateRaster);
 }
+#endif
 template<typename T>
 clsRasterData<T>::clsRasterData(string ascFileName, clsRasterData<T> *mask)
 {
@@ -564,7 +567,8 @@ void clsRasterData<T>::outputGTiff(map<string, double> header, string &srs, T *v
 	poDstDS->SetProjection(srs.c_str());
 	GDALClose(poDstDS);
 }
-
+/// Output functions based on MongoDB
+#ifdef USEMONGO
 template<typename T>
 void clsRasterData<T>::outputToMongoDB(string remoteFilename, mongoc_gridfs_t *gfs)
 {
@@ -723,6 +727,7 @@ void clsRasterData<T>::outputToMongoDB(clsRasterData *templateRasterData, T **va
     clsRasterData<T>::outputToMongoDB(*(templateRasterData->getRasterHeader()), srs, nRows, position, value, lyrs,
                                    filename, gfs);
 }
+#endif
 template<typename T>
 void clsRasterData<T>::outputWeightFile(clsRasterData *templateRasterData, int nCols, float weight, string filename)
 {
@@ -1033,6 +1038,8 @@ void clsRasterData<T>::ReadFromGDAL(string fileName, clsRasterData *mask)
         GDALClose(poDataset);
     }
 }
+/// Read functions based on MongoDB
+#ifdef USEMONGO
 template<typename T>
 int clsRasterData<T>::ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFilename)
 {
@@ -1257,7 +1264,7 @@ int clsRasterData<T>::ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFi
     }
     return 0;
 }
-
+#endif
 
 //int clsRasterData<T>::getCols()
 //{

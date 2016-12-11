@@ -2,12 +2,13 @@
  * \ingroup data
  * \brief Define Raster class to handle raster data
  *
- * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.3.5)
+ * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.3.5 if stated by MACRAO: USEMONGO)
  * 2. Array1D and Array2D raster data are supported
  * \author Junzhi Liu, LiangJun Zhu
  * \version 2.0
  * \date Apr. 2011
  * \revised May. 2016
+ * \revised Dec. 2016 Separated from SEIMS to a common library for widely use.
  * 
  */
 #pragma once
@@ -15,11 +16,29 @@
 #include <string>
 #include <map>
 #include "util.h"
+#ifdef USEMONGO
 #include "mongoc.h"
 #include "MongoUtil.h"
-
+#endif
 using namespace std;
 
+/*!
+ Define Raster related constant strings used for raster headers
+ */
+#define HEADER_RS_NODATA        "NODATA_VALUE"
+#define HEADER_RS_XLL           "XLLCENTER"
+#define HEADER_RS_YLL           "YLLCENTER"
+#define HEADER_RS_NROWS         "NROWS"
+#define HEADER_RS_NCOLS         "NCOLS"
+#define HEADER_RS_CELLSIZE      "CELLSIZE"
+#define HEADER_RS_LAYERS        "LAYERS"
+#define HEADER_RS_SRS           "SRS"
+
+/* !
+ Files or database constant strings
+ */
+#define ASCIIExtension          ".asc"
+#define GTiffExtension          ".tif"
 /*!
  * \ingroup data
  * \class clsRasterData
@@ -35,7 +54,6 @@ public:
      * By default, 1D raster data
      * \sa ReadASCFile()
      *
-     * \param[in] ascFileName ASCII file path
      */
     clsRasterData(string);
 
@@ -50,11 +68,13 @@ public:
      * \brief Constructor of clsRasterData instance from  ASCII file and mask clsRasterData
      * By default, 1D raster data
      * \sa ReadASCFile()
-     * \param[in] ascFileName \a string
+     * \param[in] filename \a string
      * \param[in] mask \a clsRasterData
      */
-    clsRasterData<T>(string, clsRasterData<T> *);
+    clsRasterData<T>(string filename, clsRasterData<T> *mask);
 
+    /// Initialization function based on MongoDB
+#ifdef USEMONGO
     /*!
      * \brief Constructor of clsRasterData instance from mongoDB
      * By default, 1D raster data
@@ -65,7 +85,7 @@ public:
      * \param[in] templateRaster \a clsRasterData, NULL as default
      */
     clsRasterData<T>(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData<T> *templateRaster = NULL);
-
+#endif
     //! Destructor, Set \a m_rasterPositionData, \a m_rasterData, \a m_mask to \a NULL
     ~clsRasterData(void);
 
@@ -162,7 +182,7 @@ public:
      * \param[in] value \a T*, Raster data
      * \param[in] filename \a string, output ASC file path
      */
-    static void outputASCFile(map<string, double>, int, float **, T *, string);
+    static void outputASCFile(map<string, double> header, int nRows, float ** position, T *value, string filename);
 
     /*!
      * \brief Write 2D raster data into ASC file
@@ -173,7 +193,7 @@ public:
      * \param[in] value \a T**, 2D Raster data
      * \param[in] filename \a string, output ASC file path, take the CoreName as prefix
      */
-    static void outputASCFile(map<string, double>, int, float **, T **, string);
+    static void outputASCFile(map<string, double> header, int nRows, float **position, T **value, string filename);
 
     /*!
      * \brief Write raster data into ASC file
@@ -182,7 +202,7 @@ public:
      * \param[in] value \a T*, Raster data
      * \param[in] filename \a string, output ASC file path
      */
-    static void outputASCFile(clsRasterData *, T *, string);
+    static void outputASCFile(clsRasterData *templateRasterData, T *value, string filename);
 
     /*!
      * \brief Write 2D raster data into ASC file
@@ -191,7 +211,7 @@ public:
      * \param[in] value \a T**, 2D Raster data
      * \param[in] filename \a string, output ASC file path
      */
-    static void outputASCFile(clsRasterData *, T **, string);
+    static void outputASCFile(clsRasterData *templateRasterData, T **value, string filename);
 
     //! Write raster to GTIFF Grid file, if 2D raster, output name will be filename_LyrNum
     void outputGTiff(string filename);
@@ -244,6 +264,9 @@ public:
 	 *        Used when valid position data is not available.
 	 */
 	static void outputGTiff(map<string, double> header, string &srs, T *value, string &filename);
+    
+    /// Output functions based on MongoDB
+#ifdef USEMONGO
     //! Write raster data to MongoDB, if 2D raster, output name will be filename_LyrNum
     void outputToMongoDB(string remoteFilename, mongoc_gridfs_t *gfs);
 
@@ -295,9 +318,8 @@ public:
      * \param[in] filename \a string, output file name
      * \param[in] gfs \a mongoc_gridfs_t
      */
-    static void outputToMongoDB(clsRasterData *templateRasterData, T **value, int lyrs, string filename,
-                                mongoc_gridfs_t *gfs);
-
+    static void outputToMongoDB(clsRasterData *templateRasterData, T **value, int lyrs, string filename,mongoc_gridfs_t *gfs);
+#endif
     /*!
      * \brief Write weight file according the weight value
      * \param[in] templateRasterData \a clsRasterData
@@ -305,22 +327,22 @@ public:
      * \param[in] weight \a float
      * \param[in] filename \a char*, weight file name
      */
-    static void outputWeightFile(clsRasterData *, int, float, string);
+    static void outputWeightFile(clsRasterData *templateRasterData, int nCols, float weight, string filename);
 
     /*!
      * \brief Read raster data from ASC file
-     * \param[in] ascFileName \a string
+     * \param[in] filename \a string
      */
-    void ReadASCFile(string);
+    void ReadASCFile(string filename);
 
     /*!
      * \brief Read raster data from ASC file, using mask
      * Be aware, this mask should have the same extent with the raster
      * i.e., NROWS and NCOLS are the same!
-     * \param[in] ascFileName \a string
+     * \param[in] filename \a string
      * \param[in] mask \a clsRasterData
      */
-    void ReadASCFile(string, clsRasterData *mask);
+    void ReadASCFile(string filename, clsRasterData *mask);
 
     /*!
      * \brief Read raster data using GDAL
@@ -337,7 +359,9 @@ public:
      * \param[in] mask \a clsRasterData
      */
     void ReadFromGDAL(string filename, clsRasterData *mask);
-
+    
+    /// Read functions based on MongoDB
+#ifdef USEMONGO
     /*!
      * \brief Read raster data from MongoDB
      * \param[in] gfs \a mongoc_gridfs_t
@@ -354,7 +378,7 @@ public:
      * \param[in] mask \a clsRasterData
      */
     int ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData *mask);
-
+#endif
     /*!
      * \brief Get cell number
      * \sa getCellNumber()
