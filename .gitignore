@@ -34,4 +34,4 @@ build
 cmake-build-debug
 
 # IDE releated
-.idea
+.idea/
