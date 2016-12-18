@@ -33,5 +33,5 @@ bin
 build
 cmake-build-debug
 
-# IDE releated
+# IDE related
 .idea/

@@ -11,11 +11,13 @@
  * \revised Dec. 2016 Separated from SEIMS to a common library for widely use.
  * 
  */
-#pragma once
+#ifndef CLS_RASTER_DATA
+#define CLS_RASTER_DATA
 
 #include <string>
 #include <map>
 #include "util.h"
+
 #ifdef USEMONGO
 #include "mongoc.h"
 #include "MongoUtil.h"
@@ -39,6 +41,7 @@ using namespace std;
  */
 #define ASCIIExtension          ".asc"
 #define GTiffExtension          ".tif"
+
 /*!
  * \ingroup data
  * \class clsRasterData
@@ -46,8 +49,7 @@ using namespace std;
  * \brief Raster data (1D and 2D) class to get access to raster data in MongoDB.
  */
 template<typename T>
-class clsRasterData
-{
+class clsRasterData {
 public:
     /*!
      * \brief Constructor of clsRasterData instance from ASCII file
@@ -86,6 +88,7 @@ public:
      */
     clsRasterData<T>(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData<T> *templateRaster = NULL);
 #endif
+
     //! Destructor, Set \a m_rasterPositionData, \a m_rasterData, \a m_mask to \a NULL
     ~clsRasterData(void);
 
@@ -118,8 +121,8 @@ public:
     //! Get position index in 1D raster data for given coordinate (x,y)
     int getPosition(float x, float y);
 
-	//! Get position index in 1D raster data for given coordinate (x,y)
-	int getPosition(double x, double y);
+    //! Get position index in 1D raster data for given coordinate (x,y)
+    int getPosition(double x, double y);
 
     //! Get raster data, include valid cell number and data
     void getRasterData(int *, T **);
@@ -141,8 +144,10 @@ public:
 
     //! Get the spatial reference
     const char *getSRS() { return m_srs.c_str(); }
-	//! Get the spatial reference string
-	string getSRSString() { return m_srs; }
+
+    //! Get the spatial reference string
+    string getSRSString() { return m_srs; }
+
     //! Get raster data at the valid cell index
     T getValue(int validCellIndex);
 
@@ -182,7 +187,7 @@ public:
      * \param[in] value \a T*, Raster data
      * \param[in] filename \a string, output ASC file path
      */
-    static void outputASCFile(map<string, double> header, int nRows, float ** position, T *value, string filename);
+    static void outputASCFile(map<string, double> header, int nRows, float **position, T *value, string filename);
 
     /*!
      * \brief Write 2D raster data into ASC file
@@ -259,12 +264,13 @@ public:
      */
     static void outputGTiff(map<string, double> header, string &srs, int nValidCells, float **position, T **value,
                             string filename);
-	/*
-	 * \brief Write 2D-array raster data into GTIFF file
-	 *        Used when valid position data is not available.
-	 */
-	static void outputGTiff(map<string, double> header, string &srs, T *value, string &filename);
-    
+
+    /*
+     * \brief Write 2D-array raster data into GTIFF file
+     *        Used when valid position data is not available.
+     */
+    static void outputGTiff(map<string, double> header, string &srs, T *value, string &filename);
+
     /// Output functions based on MongoDB
 #ifdef USEMONGO
     //! Write raster data to MongoDB, if 2D raster, output name will be filename_LyrNum
@@ -277,7 +283,7 @@ public:
      * \param[in] srs spatial reference string
      * \param[in] nValidCells \a int, valid cell number
      * \param[in] position \a float**, position index
-	 * \param[in] value \a T*, Raster data
+     * \param[in] value \a T*, Raster data
      * \param[in] filename \a string, output file name
      * \param[in] gfs \a mongoc_gridfs_t
      */
@@ -320,6 +326,7 @@ public:
      */
     static void outputToMongoDB(clsRasterData *templateRasterData, T **value, int lyrs, string filename,mongoc_gridfs_t *gfs);
 #endif
+
     /*!
      * \brief Write weight file according the weight value
      * \param[in] templateRasterData \a clsRasterData
@@ -359,7 +366,7 @@ public:
      * \param[in] mask \a clsRasterData
      */
     void ReadFromGDAL(string filename, clsRasterData *mask);
-    
+
     /// Read functions based on MongoDB
 #ifdef USEMONGO
     /*!
@@ -379,6 +386,7 @@ public:
      */
     int ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData *mask);
 #endif
+
     /*!
      * \brief Get cell number
      * \sa getCellNumber()
@@ -386,8 +394,8 @@ public:
     int Size() { return m_nCells; }
 
 private:
-	///< noDataValue
-	T m_noDataValue;
+    ///< noDataValue
+    T m_noDataValue;
     ///< raster file name
     string m_fileName;
     ///< raster data (1D array)
@@ -417,3 +425,4 @@ private:
 //	bool IsEmpty(void);
 };
 
+#endif
