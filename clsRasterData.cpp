@@ -69,7 +69,10 @@ clsRasterData<T>::clsRasterData(string ascFileName, clsRasterData<T> *mask) {
 
 template<typename T>
 clsRasterData<T>::~clsRasterData(void) {
-    if (m_rasterData != NULL) delete[] m_rasterData;
+    if (m_rasterData != NULL){
+		delete[] m_rasterData;
+		m_rasterData = NULL;
+	}
 
     if (m_rasterPositionData != NULL && m_mask == NULL) {
         for (int i = 0; i < m_nCells; ++i) {
@@ -88,6 +91,7 @@ clsRasterData<T>::~clsRasterData(void) {
             }
         }
         delete[] m_raster2DData;
+		m_raster2DData = NULL;
     }
 }
 
