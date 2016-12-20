@@ -1,7 +1,7 @@
 /*!
  * \brief Implementation of clsRasterData class
  *
- * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.3.5)
+ * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.5.0)
  * 2. Array1D and Array2D raster data are supported
  * \author Junzhi Liu, LiangJun Zhu
  * \version 2.0
@@ -9,20 +9,12 @@
  * \revised May. 2016
  * 
  */
-
+#ifndef CLS_RASTER_DATA
 #include "clsRasterData.h"
-#include <fstream>
-#include "utils.h"
-#include "ModelException.h"
-#include <iomanip>
-/// include GDAL
-#include "gdal.h"
-#include "gdal_priv.h"
-#include "cpl_string.h"
-#include "ogr_spatialref.h"
+
 
 template<typename T>
-clsRasterData<T>::clsRasterData(void) {
+inline clsRasterData<T>::clsRasterData(void) {
     m_rasterPositionData = NULL;
     m_rasterData = NULL;
     m_mask = NULL;
@@ -44,7 +36,7 @@ clsRasterData<T>::clsRasterData(string rstFileName) {
         ReadFromGDAL(rstFileName);
 }
 /// Initialization function based on MongoDB
-#ifdef USEMONGO
+#ifdef USE_MONGODB
 template<typename T>
 clsRasterData<T>::clsRasterData(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData<T> *templateRaster)
 {
@@ -530,7 +522,7 @@ void clsRasterData<T>::outputGTiff(map<string, double> header, string &srs, T *v
     GDALClose(poDstDS);
 }
 /// Output functions based on MongoDB
-#ifdef USEMONGO
+#ifdef USE_MONGODB
 template<typename T>
 void clsRasterData<T>::outputToMongoDB(string remoteFilename, mongoc_gridfs_t *gfs)
 {
@@ -972,7 +964,7 @@ void clsRasterData<T>::ReadFromGDAL(string fileName, clsRasterData *mask) {
     }
 }
 /// Read functions based on MongoDB
-#ifdef USEMONGO
+#ifdef USE_MONGODB
 template<typename T>
 int clsRasterData<T>::ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFilename)
 {
@@ -1242,3 +1234,5 @@ int clsRasterData<T>::ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFi
 //	map<string,float>* header =  getRasterHeader();
 //	return int((*header)["NROWS"]);
 //}
+
+#endif

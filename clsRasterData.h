@@ -2,7 +2,7 @@
  * \ingroup data
  * \brief Define Raster class to handle raster data
  *
- * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.3.5 if stated by MACRAO: USEMONGO)
+ * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.5.0 if stated by MACRAO: USE_MONGODB)
  * 2. Array1D and Array2D raster data are supported
  * \author Junzhi Liu, LiangJun Zhu
  * \version 2.0
@@ -18,10 +18,21 @@
 #include <map>
 #include "util.h"
 
-#ifdef USEMONGO
+#ifdef USE_MONGODB
 #include "mongoc.h"
 #include "MongoUtil.h"
 #endif
+/// include GDAL
+#include "gdal.h"
+#include "gdal_priv.h"
+#include "cpl_string.h"
+#include "ogr_spatialref.h"
+
+#include <fstream>
+#include "utils.h"
+#include "ModelException.h"
+#include <iomanip>
+
 using namespace std;
 
 /*!
@@ -76,7 +87,7 @@ public:
     clsRasterData<T>(string filename, clsRasterData<T> *mask);
 
     /// Initialization function based on MongoDB
-#ifdef USEMONGO
+#ifdef USE_MONGODB
     /*!
      * \brief Constructor of clsRasterData instance from mongoDB
      * By default, 1D raster data
@@ -272,7 +283,7 @@ public:
     static void outputGTiff(map<string, double> header, string &srs, T *value, string &filename);
 
     /// Output functions based on MongoDB
-#ifdef USEMONGO
+#ifdef USE_MONGODB
     //! Write raster data to MongoDB, if 2D raster, output name will be filename_LyrNum
     void outputToMongoDB(string remoteFilename, mongoc_gridfs_t *gfs);
 
@@ -368,7 +379,7 @@ public:
     void ReadFromGDAL(string filename, clsRasterData *mask);
 
     /// Read functions based on MongoDB
-#ifdef USEMONGO
+#ifdef USE_MONGODB
     /*!
      * \brief Read raster data from MongoDB
      * \param[in] gfs \a mongoc_gridfs_t

@@ -4,7 +4,7 @@ using namespace std;
 
 int main(int argc, const char *argv[]) {
     // insert code here...
-    std::cout << "Hello, GDAL!\n";
+    std::cout << "*** Raster IO Class Demo ***\n";
     // string filename = "/Users/winnie/Documents/zhulj/data/dem_30m.tif";
     string filename = "C:\\z_data\\PleasantValley\\PleasantVly-DEM-version\\pvDEM_feet_from_3dr.tif";
     GDALAllRegister();
