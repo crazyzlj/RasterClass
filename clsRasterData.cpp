@@ -7,7 +7,7 @@
  * \version 2.0
  * \date Apr. 2011
  * \revised May. 2016
- * 
+ *
  */
 #ifndef CLS_RASTER_DATA
 #include "clsRasterData.h"
@@ -35,6 +35,7 @@ clsRasterData<T>::clsRasterData(string filename, bool getAllValues, clsRasterDat
 //    else
 //        ReadFromGDAL(filename, getAllValues, mask);
 }
+
 
 ///// Initialization function based on MongoDB
 //#ifdef USE_MONGODB
@@ -323,6 +324,7 @@ void clsRasterData<T>::outputASCFile(clsRasterData *templateRasterData, T **valu
     templateRasterData->getRasterPositionData(&nRows, &position);
     clsRasterData<T>::outputASCFile(*(templateRasterData->getRasterHeader()), nRows, position, value, filename);
 }
+<<<<<<< HEAD
 //
 //template<typename T>
 //void clsRasterData<T>::outputGTiff(string filename) {
@@ -738,6 +740,368 @@ void clsRasterData<T>::outputASCFile(clsRasterData *templateRasterData, T **valu
 //    }
 //}
 //
+=======
+
+template<typename T>
+void clsRasterData<T>::outputGTiff(string filename) {
+    if (m_is2DRaster)
+        clsRasterData<T>::outputGTiff(m_headers, m_srs, m_nCells, m_rasterPositionData, m_raster2DData, filename);
+    else
+        clsRasterData<T>::outputGTiff(m_headers, m_srs, m_nCells, m_rasterPositionData, m_rasterData, filename);
+}
+
+template<typename T>
+void clsRasterData<T>::outputGTiff(map<string, double> header, string &srs, int nValidCells, float **position, T *value,
+                                   string filename) {
+    double noDataValue = header[HEADER_RS_NODATA];
+    int nCols = (int) header[HEADER_RS_NCOLS];
+    int nRows = (int) header[HEADER_RS_NROWS];
+    double xll = header[HEADER_RS_XLL];
+    double yll = header[HEADER_RS_YLL];
+    double dx = header[HEADER_RS_CELLSIZE];
+    int n = nRows * nCols;
+    T *data = new T[n];
+
+    int index = 0;
+    for (int i = 0; i < nRows; ++i) {
+        for (int j = 0; j < nCols; ++j) {
+            if (index < nValidCells) {
+                if (position[index][0] == i && position[index][1] == j) {
+                    data[i * nCols + j] = value[index];
+                    index++;
+                } else
+                    data[i * nCols + j] = (T) noDataValue;
+            } else
+                data[i * nCols + j] = (T) noDataValue;
+        }
+    }
+
+    const char *pszFormat = "GTiff";
+    GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
+
+    char **papszOptions = poDriver->GetMetadata();
+    GDALDataset *poDstDS = poDriver->Create(filename.c_str(), nCols, nRows, 1, GDT_Float32, papszOptions);
+
+    /// Write the data to new file
+    GDALRasterBand *poDstBand = poDstDS->GetRasterBand(1);
+    poDstBand->RasterIO(GF_Write, 0, 0, nCols, nRows, data, nCols, nRows, GDT_Float32, 0, 0);
+    poDstBand->SetNoDataValue(noDataValue);
+
+    double geoTrans[6];
+    geoTrans[0] = xll;
+    geoTrans[1] = dx;
+    geoTrans[2] = 0.;
+    geoTrans[3] = yll + nRows * dx;
+    geoTrans[4] = 0.;
+    geoTrans[5] = -dx;
+    poDstDS->SetGeoTransform(geoTrans);
+    poDstDS->SetProjection(srs.c_str());
+    //OGRSpatialReference srs;
+    //srs.importFromWkt();
+    //char *pSrsWkt = NULL;
+    //srs.exportToWkt(&pSrsWkt);
+    //poDstDS->SetProjection(pSrsWkt);
+    //CPLFree(pSrsWkt);
+
+    GDALClose(poDstDS);
+
+    delete[] data;
+}
+
+template<typename T>
+void clsRasterData<T>::outputGTiff(map<string, double> header, string &srs, int nValidCells, float **position,
+                                   T **value, string filename) {
+    string prePath = GetPathFromFullName(filename);
+    string coreName = GetCoreFileName(filename);
+    int nLyrs = (int) header[HEADER_RS_LAYERS];
+    double noDataValue = header[HEADER_RS_NODATA];
+    int nCols = (int) header[HEADER_RS_NCOLS];
+    int nRows = (int) header[HEADER_RS_NROWS];
+    double xll = header[HEADER_RS_XLL];
+    double yll = header[HEADER_RS_YLL];
+    double dx = header[HEADER_RS_CELLSIZE];
+    int n = nRows * nCols;
+
+    for (int lyr = 0; lyr < nLyrs; lyr++) {
+        stringstream oss;
+        oss << prePath << coreName << "_" << (lyr + 1) << GTiffExtension;
+        T *data = new T[n];
+        int index = 0;
+        for (int i = 0; i < nRows; ++i) {
+            for (int j = 0; j < nCols; ++j) {
+                if (index < nValidCells) {
+                    if (position[index][0] == i && position[index][1] == j) {
+                        data[i * nCols + j] = value[index][lyr];
+                        index++;
+                    } else
+                        data[i * nCols + j] = (T) noDataValue;
+                } else
+                    data[i * nCols + j] = (T) noDataValue;
+            }
+        }
+
+        const char *pszFormat = "GTiff";
+        GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
+
+        char **papszOptions = poDriver->GetMetadata();
+        GDALDataset *poDstDS = poDriver->Create(oss.str().c_str(), nCols, nRows, 1, GDT_Float32, papszOptions);
+
+        /// Write the data to new file
+        GDALRasterBand *poDstBand = poDstDS->GetRasterBand(1);
+        poDstBand->RasterIO(GF_Write, 0, 0, nCols, nRows, data, nCols, nRows, GDT_Float32, 0, 0);
+        poDstBand->SetNoDataValue(noDataValue);
+
+        double geoTrans[6];
+        geoTrans[0] = xll;
+        geoTrans[1] = dx;
+        geoTrans[2] = 0.;
+        geoTrans[3] = yll + nRows * dx;
+        geoTrans[4] = 0.;
+        geoTrans[5] = -dx;
+        poDstDS->SetGeoTransform(geoTrans);
+        poDstDS->SetProjection(srs.c_str());
+        GDALClose(poDstDS);
+
+        delete[] data;
+    }
+}
+
+template<typename T>
+void clsRasterData<T>::outputGTiff(clsRasterData *templateRasterData, T *value, string rasterName) {
+    int nRows;
+    float **position;
+    templateRasterData->getRasterPositionData(&nRows, &position);
+    string srs(templateRasterData->getSRS());
+    clsRasterData<T>::outputGTiff(*(templateRasterData->getRasterHeader()), srs, nRows, position, value, rasterName);
+}
+
+template<typename T>
+void clsRasterData<T>::outputGTiff(clsRasterData *templateRasterData, T **value, string rasterName) {
+    int nRows;
+    float **position;
+    templateRasterData->getRasterPositionData(&nRows, &position);
+    string srs(templateRasterData->getSRS());
+    clsRasterData<T>::outputGTiff(*(templateRasterData->getRasterHeader()), srs, nRows, position, value, rasterName);
+}
+
+template<typename T>
+void clsRasterData<T>::outputGTiff(map<string, double> header, string &srs, T *value, string &filename) {
+    double noDataValue = header[HEADER_RS_NODATA];
+    int nCols = (int) header[HEADER_RS_NCOLS];
+    int nRows = (int) header[HEADER_RS_NROWS];
+    double xll = header[HEADER_RS_XLL];
+    double yll = header[HEADER_RS_YLL];
+    double dx = header[HEADER_RS_CELLSIZE];
+    //int n = nRows * nCols;
+
+    const char *pszFormat = "GTiff";
+    GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
+
+    char **papszOptions = poDriver->GetMetadata();
+    GDALDataset *poDstDS = poDriver->Create(filename.c_str(), nCols, nRows, 1, GDT_Float32, papszOptions);
+
+    /// Write the data to new file
+    GDALRasterBand *poDstBand = poDstDS->GetRasterBand(1);
+    poDstBand->RasterIO(GF_Write, 0, 0, nCols, nRows, value, nCols, nRows, GDT_Float32, 0, 0);
+    poDstBand->SetNoDataValue(noDataValue);
+
+    double geoTrans[6];
+    geoTrans[0] = xll;
+    geoTrans[1] = dx;
+    geoTrans[2] = 0.;
+    geoTrans[3] = yll + nRows * dx;
+    geoTrans[4] = 0.;
+    geoTrans[5] = -dx;
+    poDstDS->SetGeoTransform(geoTrans);
+    poDstDS->SetProjection(srs.c_str());
+    GDALClose(poDstDS);
+}
+/// Output functions based on MongoDB
+#ifdef USE_MONGODB
+template<typename T>
+void clsRasterData<T>::outputToMongoDB(string remoteFilename, mongoc_gridfs_t *gfs)
+{
+    if (m_is2DRaster && m_nLyrs > 0)
+        clsRasterData<T>::outputToMongoDB(m_headers, m_srs, m_nCells, m_rasterPositionData, m_raster2DData, m_nLyrs,
+                                       remoteFilename, gfs);
+    else
+        clsRasterData<T>::outputToMongoDB(m_headers, m_srs, m_nCells, m_rasterPositionData, m_rasterData, remoteFilename,
+                                       gfs);
+}
+template<typename T>
+void clsRasterData<T>::outputToMongoDB(map<string, double> header, string &srs, int nValid, float **position, T *value,
+                                    string remoteFilename, mongoc_gridfs_t *gfs)
+{
+    //float noData = -9999.0f; /// removed to util.h #define
+    /// Prepare binary data
+    int rows = int(header[HEADER_RS_NROWS]);
+    int cols = int(header[HEADER_RS_NCOLS]);
+    T *data = new T[rows * cols];
+
+    int index = 0;
+    int dataIndex = 0;
+    for (int i = 0; i < rows; ++i)
+    {
+        for (int j = 0; j < cols; ++j)
+        {
+            dataIndex = i * cols + j;
+            if (index < nValid)
+            {
+                if (position[index][0] == i && position[index][1] == j)
+                {
+                    data[dataIndex] = value[index];
+                    index++;
+                }
+                else
+                    data[dataIndex] = (T) NODATA_VALUE;
+            }
+            else
+                data[dataIndex] = (T) NODATA_VALUE;
+        }
+    }
+    size_t iID = remoteFilename.find_first_of('_');
+    int subbasinID = atoi(remoteFilename.substr(0, iID).c_str());
+    bson_t *p = (bson_t *) malloc(sizeof(bson_t));
+    bson_init(p);
+    BSON_APPEND_UTF8(p, MONG_GRIDFS_ID, remoteFilename.c_str());
+    BSON_APPEND_INT32(p, MONG_GRIDFS_SUBBSN, subbasinID);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_NCOLS, cols);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_NROWS, rows);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_XLL, header[HEADER_RS_XLL]);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_YLL, header[HEADER_RS_YLL]);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_CELLSIZE, header[HEADER_RS_CELLSIZE]);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_NODATA, (T) NODATA_VALUE);
+    BSON_APPEND_UTF8(p, HEADER_RS_SRS, srs.c_str());
+    mongoc_gridfs_file_t *gfile = NULL;
+    mongoc_gridfs_file_opt_t gopt = {0};
+    gopt.filename = remoteFilename.c_str();
+    gopt.content_type = "float"; // TODO, Is the content_type can be any STRING?
+    gopt.metadata = p;
+    gfile = mongoc_gridfs_create_file(gfs, &gopt);
+    mongoc_iovec_t ovec;
+    ovec.iov_base = (char *) data;
+    ovec.iov_len = rows * cols * sizeof(T);
+    //ssize_t r = mongoc_gridfs_file_writev(gfile, &ovec, 1, 0);
+    mongoc_gridfs_file_writev(gfile, &ovec, 1, 0);
+    mongoc_gridfs_file_save(gfile);
+    mongoc_gridfs_file_destroy(gfile);
+    bson_destroy(p);
+    free(p);
+    delete[] data;
+}
+template<typename T>
+void clsRasterData<T>::outputToMongoDB(map<string, double> header, string &srs, int inValid, float **position,
+                                    T **value, int lyrs, string remoteFilename, mongoc_gridfs_t *gfs)
+{
+    /// Prepare binary data
+    int rows = int(header[HEADER_RS_NROWS]);
+    int cols = int(header[HEADER_RS_NCOLS]);
+    int nLyrs = lyrs;
+    T *data = new T[rows * cols * nLyrs];
+
+    int index = 0;
+    int dataIndex = 0;
+    for (int i = 0; i < rows; ++i)
+    {
+        for (int j = 0; j < cols; ++j)
+        {
+            for (int k = 0; k < nLyrs; k++)
+            {
+                dataIndex = i * cols * nLyrs + j * nLyrs + k;
+                if (index < inValid)
+                {
+                    if (position[index][0] == i && position[index][1] == j)
+                    {
+                        data[dataIndex] = value[index][k];
+                        index++;
+                    }
+                    else
+                        data[dataIndex] = (T) NODATA_VALUE;
+                }
+                else
+                    data[dataIndex] = (T) NODATA_VALUE;
+            }
+        }
+    }
+    size_t iID = remoteFilename.find_first_of('_');
+    int subbasinID = atoi(remoteFilename.substr(0, iID).c_str());
+    bson_t *p = (bson_t *) malloc(sizeof(bson_t));
+    bson_init(p);
+    BSON_APPEND_UTF8(p, MONG_GRIDFS_ID, remoteFilename.c_str());
+    BSON_APPEND_INT32(p, MONG_GRIDFS_SUBBSN, subbasinID);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_NCOLS, cols);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_NROWS, rows);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_XLL, header[HEADER_RS_XLL]);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_YLL, header[HEADER_RS_YLL]);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_CELLSIZE, header[HEADER_RS_CELLSIZE]);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_NODATA, NODATA_VALUE);
+    BSON_APPEND_DOUBLE(p, HEADER_RS_LAYERS, nLyrs);
+    BSON_APPEND_UTF8(p, HEADER_RS_SRS, srs.c_str());
+    mongoc_gridfs_file_t *gfile = NULL;
+    mongoc_gridfs_file_opt_t gopt = {0};
+    gopt.filename = remoteFilename.c_str();
+    gopt.content_type = "float";
+    gopt.metadata = p;
+    gfile = mongoc_gridfs_create_file(gfs, &gopt);
+    mongoc_iovec_t ovec;
+    ovec.iov_base = (char *) data;
+    ovec.iov_len = rows * cols * nLyrs * sizeof(T);
+    //ssize_t r = mongoc_gridfs_file_writev(gfile, &ovec, 1, 0);
+    mongoc_gridfs_file_writev(gfile, &ovec, 1, 0);
+    mongoc_gridfs_file_save(gfile);
+    mongoc_gridfs_file_destroy(gfile);
+    bson_destroy(p);
+    free(p);
+    delete[] data;
+}
+template<typename T>
+void clsRasterData<T>::outputToMongoDB(clsRasterData *templateRasterData, T *value, string filename,
+                                    mongoc_gridfs_t *gfs)
+{
+    int nRows;
+    float **position;
+    templateRasterData->getRasterPositionData(&nRows, &position);
+    string srs(templateRasterData->getSRS());
+    clsRasterData<T>::outputToMongoDB(*(templateRasterData->getRasterHeader()), srs, nRows, position, value, filename,
+                                   gfs);
+}
+template<typename T>
+void clsRasterData<T>::outputToMongoDB(clsRasterData *templateRasterData, T **value, int lyrs, string filename,
+                                    mongoc_gridfs_t *gfs)
+{
+    int nRows;
+    float **position;
+    templateRasterData->getRasterPositionData(&nRows, &position);
+    string srs(templateRasterData->getSRS());
+    clsRasterData<T>::outputToMongoDB(*(templateRasterData->getRasterHeader()), srs, nRows, position, value, lyrs,
+                                   filename, gfs);
+}
+#endif
+
+template<typename T>
+void clsRasterData<T>::outputWeightFile(clsRasterData *templateRasterData, int nCols, float weight, string filename) {
+    int nRows;
+    float **position;
+    templateRasterData->getRasterPositionData(&nRows, &position);
+
+    ofstream rasterFile(filename.c_str());
+    /// Write header
+    rasterFile << nRows << "\n";
+    rasterFile << nCols << "\n";
+
+    /// Write file
+    int rows = nRows;
+    int cols = nCols;
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            rasterFile << weight << " ";
+        }
+        rasterFile << "\n";
+    }
+    rasterFile.close();
+}
+
+>>>>>>> a45e46301bfa3a8d8bd7c36f6df7e651e80970a6
 template<typename T>
 void clsRasterData<T>::ReadASCFile(string ascFileName, bool exludeNodata, clsRasterData<int> *mask) {
     utils util;
@@ -928,6 +1292,7 @@ void clsRasterData<T>::ReadASCFile(string ascFileName, bool exludeNodata, clsRas
         }
     }
 }
+<<<<<<< HEAD
 
 //template<typename T>
 //void clsRasterData<T>::ReadFromGDAL(string filename) {
@@ -1305,6 +1670,10 @@ void clsRasterData<T>::ReadASCFile(string ascFileName, bool exludeNodata, clsRas
 
 /************* Utility functions ***************/
 
+=======
+/// Read functions based on MongoDB
+#ifdef USE_MONGODB
+>>>>>>> a45e46301bfa3a8d8bd7c36f6df7e651e80970a6
 template<typename T>
 double* clsRasterData<T>::getCoordinateByRowCol(int row, int col) {
     double xllCenter = this->getXllCenter();
@@ -1372,7 +1741,7 @@ void clsRasterData<T>::copyHeader(map<string, double> *maskHeader) {
 //	for(int i=1;i<=tbl->nRows;i++)
 //	{
 //		(*headers)[tbl->FieldValue(i, 1)] = float(atof(tbl->FieldValue(i, 2).c_str()));
-//	}	
+//	}
 //	delete tbl;
 //	tbl = NULL;
 //	dbman.Close();
