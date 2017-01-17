@@ -53,8 +53,8 @@ using namespace std;
 /*!
  * Files or database constant strings
  */
-#define ASCIIExtension          ".asc"
-#define GTiffExtension          ".tif"
+#define ASCIIExtension          "asc"
+#define GTiffExtension          "tif"
 
 /*!
  * \class clsRasterData
@@ -65,6 +65,8 @@ using namespace std;
 template<typename T>
 class clsRasterData {
 public:
+	/************* Construct functions ***************/
+
     /*!
      * \brief Constructor an empty clsRasterData instance
      * By default, 1D raster data
@@ -76,29 +78,13 @@ public:
      * \brief Constructor of clsRasterData instance from TIFF, ASCII, or other GDAL supported raster file
      * By default, 1D raster data
      * \sa ReadASCFile() ReadFromGDAL()
-     * \param[in] filename Full path of the raster file
-     * \param[in] exludeNodata Excluding NODATA or not. The default is true.
-     * \param[in] mask \a clsRasterData<int> Mask layer
+	 * \param[in] filename Full path of the raster file
+	 * \param[in] mask \a clsRasterData<int> Mask layer
+     * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
+     * \param[in] useMaskExtent Use mask layer extent, even NoDATA exists.
      *
      */
-    clsRasterData(string filename, bool exludeNodata = true, clsRasterData<int> *mask = NULL);
-
-    /// Initialization function based on MongoDB
-//#ifdef USE_MONGODB
-//
-//    /*!
-//     * \brief Constructor of clsRasterData instance from MongoDB
-//     * By default, 1D raster data
-//     * \sa ReadFromMongoDB()
-//     *
-//     * \param[in] gfs \a mongoc_gridfs_t
-//     * \param[in] remoteFilename \a char*
-//     * \param[in] getAllValues Store all matrix values, or excluding NODATA. The default is false.
-//     * \param[in] templateRaster \a clsRasterData, NULL as default
-//     */
-//    clsRasterData<T>(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData<T> *templateRaster = NULL);
-//
-//#endif
+    clsRasterData(string filename, clsRasterData<int> *mask = NULL, bool calcPositions = true, bool useMaskExtent = true);
 
     //! Destructor, release \a m_rasterPositionData, \a m_rasterData and \a m_mask if existed.
     ~clsRasterData(void);
@@ -109,10 +95,11 @@ public:
      * \brief Read raster data from ASC file, using mask
      * Be aware, this mask should overlay with the raster, otherwise, exception will be thrown.
      * \param[in] filename \a string
-     * \param[in] exludeNodata Excluding NODATA or not. The default is true.
-     * \param[in] mask \a clsRasterData
+     * \param[in] mask \a clsRasterData<int>
+     * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
+	 * \param[in] useMaskExtent Use mask layer extent, even NoDATA exists.
      */
-    void ReadASCFile(string filename, bool exludeNodata = true, clsRasterData<int> *mask = NULL);
+    void ReadASCFile(string filename, clsRasterData<int> *mask = NULL, bool calcPositions = true, bool useMaskExtent = true);
 
     /************* Write functions ***************/
 
@@ -127,22 +114,22 @@ public:
      *
      * \param[in] header header information
      * \param[in] nRows \a int, valid cell number
-     * \param[in] position \a float**, position index
+     * \param[in] position \a int**, position index
      * \param[in] value \a T*, Raster data
      * \param[in] filename \a string, output ASC file path
      */
-    static void outputASCFile(map<string, double> header, int nRows, float **position, T *value, string filename);
+    void outputASCFile(map<string, double> header, int nRows, int **position, T *value, string filename);
 
     /*!
      * \brief Write 2D raster data into ASC file
      *
      * \param[in] header header information
      * \param[in] nRows \a int, valid cell number
-     * \param[in] position \a float**, position index
+     * \param[in] position \a int**, position index
      * \param[in] value \a T**, 2D Raster data
      * \param[in] filename \a string, output ASC file path, take the CoreName as prefix
      */
-    static void outputASCFile(map<string, double> header, int nRows, float **position, T **value, string filename);
+    void outputASCFile(map<string, double> header, int nRows, int **position, T **value, string filename);
 
     /*!
      * \brief Write raster data into ASC file
@@ -151,7 +138,7 @@ public:
      * \param[in] value \a T*, Raster data
      * \param[in] filename \a string, output ASC file path
      */
-    static void outputASCFile(clsRasterData *templateRasterData, T *value, string filename);
+    void outputASCFile(clsRasterData *templateRasterData, T *value, string filename);
 
     /*!
      * \brief Write 2D raster data into ASC file
@@ -160,11 +147,16 @@ public:
      * \param[in] value \a T**, 2D Raster data
      * \param[in] filename \a string, output ASC file path
      */
-    static void outputASCFile(clsRasterData *templateRasterData, T **value, string filename);
+    void outputASCFile(clsRasterData *templateRasterData, T **value, string filename);
 
+	/************* Get information functions ***************/
+	/*! Calculate basic statistical values in one time
+	 * Mean, Max, Min, STD, Range
+	 */
+    void calculateStatistics();
 
-    //! Excluding NoDATA or not
-    bool excludingNodata() { return  m_excludeNODATA; }
+	//! Excluding NoDATA or not
+    bool excludingNodata() { return m_calcPositions; }
 
     //! Get the average of raster data
     float getAverage();
@@ -208,7 +200,7 @@ public:
     map<string, double> *getRasterHeader(void);
 
     //! Get non-NODATA position index data, include cell number and (row, col)
-    void getRasterPositionData(int *, T ***);
+    void getRasterPositionData(int *, int ***);
 
     //! Get pointer of raster data
     float *getRasterDataPointer() { return m_rasterData; }
@@ -249,167 +241,6 @@ public:
     //! Is 2D raster data?
     bool is2DRaster() { return m_is2DRaster; }
 
-
-//    //! Write raster to GTIFF Grid file, if 2D raster, output name will be filename_LyrNum
-//    void outputGTiff(string filename);
-//
-//    /*!
-//     * \brief Write raster data into GTIFF file
-//     *
-//     * \param[in] templateRasterData \sa  clsRasterData
-//     * \param[in] value \a T*, Raster data
-//     * \param[in] rasterName \a string, output GTIFF file path
-//     */
-//    static void outputGTiff(clsRasterData *templateRasterData, T *value, string rasterName);
-//
-//    /*!
-//     * \brief Write raster data into GTIFF file
-//     *
-//     * \param[in] header header information
-//     * \param[in] srs spatial reference string
-//     * \param[in] nValidCells \a int, valid cell number
-//     * \param[in] position \a float**, position index
-//     * \param[in] value \a T*, Raster data
-//     * \param[in] filename \a string, output GTIFF file path
-//     */
-//    static void outputGTiff(map<string, double> header, string &srs, int nValidCells, float **position, T *value,
-//                            string filename);
-//
-//    /*!
-//     * \brief Write 2D raster data into GTIFF file
-//     *
-//     * \param[in] templateRasterData
-//     * \param[in] value \a T**, Raster data
-//     * \param[in] rasterName \a string, output GTIFF file path
-//     */
-//    static void outputGTiff(clsRasterData *templateRasterData, T **value, string rasterName);
-//
-//    /*!
-//     * \brief Write 2D raster data into GTIFF file
-//     *
-//     * \param[in] header header information
-//     * \param[in] srs spatial reference string
-//     * \param[in] nValidCells \a int, valid cell number
-//     * \param[in] position \a float**, position index
-//     * \param[in] value \a T**, Raster data
-//     * \param[in] filename \a string, output GTIFF file path
-//     */
-//    static void outputGTiff(map<string, double> header, string &srs, int nValidCells, float **position, T **value,
-//                            string filename);
-//
-//    /*
-//     * \brief Write 2D-array raster data into GTIFF file
-//     *        Used when valid position data is not available.
-//     */
-//    static void outputGTiff(map<string, double> header, string &srs, T *value, string &filename);
-//
-//    /// Output functions based on MongoDB
-//#ifdef USE_MONGODB
-//
-//    //! Write raster data to MongoDB, if 2D raster, output name will be filename_LyrNum
-//    void outputToMongoDB(string remoteFilename, mongoc_gridfs_t *gfs);
-//
-//    /*!
-//     * \brief Write raster data into MongoDB
-//     *
-//     * \param[in] header header information
-//     * \param[in] srs spatial reference string
-//     * \param[in] nValidCells \a int, valid cell number
-//     * \param[in] position \a float**, position index
-//     * \param[in] value \a T*, Raster data
-//     * \param[in] filename \a string, output file name
-//     * \param[in] gfs \a mongoc_gridfs_t
-//     */
-//    static void outputToMongoDB(map<string, double> header, string &srs, int nValid, float **position, T *value,
-//                                string remoteFilename, mongoc_gridfs_t *gfs);
-//
-//    /*!
-//     * \brief Write raster data into MongoDB
-//     *
-//     * \param[in] templateRasterData \a clsRasterData
-//     * \param[in] value \a T*, Raster data
-//     * \param[in] filename \a string, output file name
-//     * \param[in] gfs \a mongoc_gridfs_t
-//     */
-//    static void outputToMongoDB(clsRasterData *templateRasterData, T *value, string filename, mongoc_gridfs_t *gfs);
-//
-//    /*!
-//     * \brief Write 2D raster data into MongoDB
-//     *
-//     * \param[in] header header information
-//     * \param[in] srs spatial reference string
-//     * \param[in] nValidCells \a int, valid cell number
-//     * \param[in] position \a float**, position index
-//     * \param[in] value \a T** 2D RasterData
-//     * \param[in] lyrs \a layer number
-//     * \param[in] filename \a string, output file name
-//     * \param[in] gfs \a mongoc_gridfs_t
-//     */
-//    static void outputToMongoDB(map<string, double> header, string &srs, int nValid, float **position, T **value,
-//                                int lyrs, string remoteFilename, mongoc_gridfs_t *gfs);
-//
-//    /*!
-//     * \brief Write 2D raster data into MongoDB
-//     *
-//     * \param[in] templateRasterData \a clsRasterData
-//     * \param[in] value \a T**, Raster data with multi-layers, e.g., soil properties
-//     * \param[in] lyrs \a layer number
-//     * \param[in] filename \a string, output file name
-//     * \param[in] gfs \a mongoc_gridfs_t
-//     */
-//    static void
-//    outputToMongoDB(clsRasterData *templateRasterData, T **value, int lyrs, string filename, mongoc_gridfs_t *gfs);
-//
-//#endif
-//
-//    /*!
-//     * \brief Write weight file according the weight value
-//     * \param[in] templateRasterData \a clsRasterData
-//     * \param[in] nCols \a int i.e., HydroClimate site number
-//     * \param[in] weight \a float
-//     * \param[in] filename \a char*, weight file name
-//     */
-//    static void outputWeightFile(clsRasterData *templateRasterData, int nCols, float weight, string filename);
-//
-//
-//    /*!
-//     * \brief Read raster data using GDAL
-//     *
-//     * \param[in] filename \a string
-//     */
-//    void ReadFromGDAL(string filename);
-//
-//    /*!
-//     * \brief Read raster data according the the given mask file using GDAL
-//     * Be aware, this mask should have the same extent with the raster
-//     * i.e., NROWS and NCOLS are the same!
-//     * \param[in] filename \a string
-//     * \param[in] mask \a clsRasterData
-//     */
-//    void ReadFromGDAL(string filename, clsRasterData *mask);
-//
-//    /// Read functions based on MongoDB
-//#ifdef USE_MONGODB
-//
-//    /*!
-//     * \brief Read raster data from MongoDB
-//     * \param[in] gfs \a mongoc_gridfs_t
-//     * \param[in] remoteFilename \a char*, raster file name
-//     */
-//    int ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFilename);
-//
-//    /*!
-//     * \brief Read raster data according the the given mask file from MongoDB
-//     * Be aware, this mask should have the same extent with the raster
-//     * i.e., NROWS and NCOLS are the same!
-//     * \param[in] gfs \a mongoc_gridfs_t
-//     * \param[in] remoteFilename \a char*, raster file name
-//     * \param[in] mask \a clsRasterData
-//     */
-//    int ReadFromMongoDB(mongoc_gridfs_t *gfs, const char *remoteFilename, clsRasterData *mask);
-//
-//#endif
-
     /*!
      * \brief Get cell number
      * \sa getCellNumber()
@@ -439,24 +270,44 @@ public:
      * \param[in] refers
      */
     void copyHeader(map<string, double> *refers);
+
+	/*!
+	 * 
+	 */
+	void extractByMask();
+
+	/*!
+	 * 
+	 */
+	void calculateValidPositions();
+
+	/*!
+	 * 
+	 */
+	void reCalculateHeaders();
 private:
+    /*! cell number of raster data
+	 * 1. all grid cell number, i.e., ncols*nrows, when m_calcPositions is False
+	 * 2. valid cell number excluding NoDATA, when m_calcPositions is True.
+	 * 3. including NoDATA where mask is valid, when m_useMaskExtent is True.
+	 */
+    int m_nCells;
     ///< noDataValue
     T m_noDataValue;
     ///< raster file name
     string m_fileName;
-    ///< get all matrix values, or excluding NODATA. The default is true, means excluding NODATA.
-    bool m_excludeNODATA = true;
+    ///< calculate valid positions or not. The default is true.
+    bool m_calcPositions;
+	///< To be consistent with other datesets, keep the extent of Mask layer, even include NoDATA.
+	bool m_useMaskExtent;
     ///< raster data (1D array)
     T *m_rasterData;
     ///< cell index (row, col) in m_rasterData (2D array)
     int **m_rasterPositionData;
-    ///< cell number of raster data (exclude NODATA_VALUE)
-    int m_nCells;
     ///< Header information, using double in case of truncation of coordinate value
     map<string, double> m_headers;
     ///< mask clsRasterData instance
     clsRasterData<int> *m_mask;
-
     //! raster data (2D array)
     T **m_raster2DData;
     //! Flag to identify 1D or 2D raster
@@ -465,12 +316,10 @@ private:
     int m_nLyrs;
     //! OGRSpatialReference
     string m_srs;
-
-//private:
-//	void DeleteExistingData(void);
-//public:
-//	bool IsNull(int i, int j);
-//	bool IsEmpty(void);
+	//! Statistics calculated?
+	bool m_statisticsCalculated;
+	//! Map to store basic statistical values
+	map<string, double> m_statsMap;
 };
 
 #endif
