@@ -52,7 +52,7 @@ ENDIF ()
 ################ Add executables #################
 set(SOURCE_FILES clsRasterData.cpp main.cpp)
 set(UTILS_INC ${CMAKE_CURRENT_SOURCE_DIR}/../UtilsClass)
-set(UTILS_FILES ${UTILS_INC}/utils.cpp ${UTILS_INC}/util.cpp ${UTILS_INC}/StringList.cpp ${UTILS_INC}/ModelException.cpp)
+set(UTILS_FILES ${UTILS_INC}/utils.cpp ${UTILS_INC}/ModelException.cpp)
 set(MONGO_INC ${CMAKE_CURRENT_SOURCE_DIR}/../MongoUtilClass)
 set(MONGO_FILES ${MONGO_INC}/MongoUtil.cpp)
 
