@@ -12,7 +12,7 @@ RasterClass采用CMake进行跨平台代码管理，理论上，支持任何主�
 
 由于Travis CI配置GDAL和mongo-c-driver耗时十几分钟，因此目前仅持续构建Linux+GCC4.8环境。
 
-Build Status: [![Build Status](https://travis-ci.org/lreis2415/RasterClass.svg?branch=master)](https://travis-ci.org/lreis2415/RasterClass) |
+Build Status: [![Build Status](https://travis-ci.org/lreis2415/RasterClass.svg?branch=master)](https://travis-ci.org/lreis2415/RasterClass)
 
 
 ## 1 Introduction
