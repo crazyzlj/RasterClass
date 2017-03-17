@@ -1,7 +1,7 @@
 # CMake build for Windows, Linux, and macOS
 # Updated by Liang-Jun Zhu
 # zlj@lreis.ac.cn
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 2.8)
 project(RasterClass)
 IF (COMMAND CMAKE_POLICY)
     CMAKE_POLICY(SET CMP0015 NEW)
