@@ -5,5 +5,6 @@ set -e
 
 # git clone UtilClass
 cd ..
-git clone --depth=50 --branch=master https://github.com/lreis2415/UtilsClass.git lreis2415/UtilsClass
+git clone --depth=50 --branch=master https://github.com/lreis2415/UtilsClass.git
 ls
+cd RasterClass
