@@ -13,7 +13,7 @@ wget -q http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.gz
 tar xvzf gdal-$GDAL_VERSION.tar.gz
 cd gdal-$GDAL_VERSION
 ./configure
-make -j4
+make -j 4
 sudo make install
 # download mongo-c-driver from github, and compile and install
 MONGOC_VERSION=1.6.1
@@ -21,6 +21,6 @@ wget -q https://github.com/mongodb/mongo-c-driver/archive/$MONGOC_VERSION.tar.gz
 tar xzf mongo-c-driver-$MONGOC_VERSION.tar.gz
 cd mongo-c-driver-$MONGOC_VERSION
 ./configure --disable-automatic-init-and-cleanup
-make -j4
+make -j 4
 sudo make install
 sudo ldconfig
