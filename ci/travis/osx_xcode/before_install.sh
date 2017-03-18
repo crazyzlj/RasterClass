@@ -15,7 +15,6 @@ export CPPFLAGS="-I/usr/local/opt/openssl/include"
 ./configure --disable-automatic-init-and-cleanup
 make -j4
 sudo make install
-sudo ldconfig
 # git clone MongoUtilClass and UtilClass
 cd ..
 git clone --depth=50 --branch=master https://github.com/lreis2415/UtilsClass.git
