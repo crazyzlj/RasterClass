@@ -1,5 +1,6 @@
 # This is the config file for building RasterClass with Travis-ci.org
-
+services:
+  - mongodb
 matrix:
   fast_finish: true
   include:
