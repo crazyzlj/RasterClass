@@ -17,7 +17,7 @@ GDAL_VERSION=1.11.5
 #make -j4
 #sudo make install
 # install gdal from apt-get
-sudo apt-get install -qq gdal-bin libgdal1-dev libgdal1
+sudo apt-get install -qq gdal-bin libgdal-dev libgdal
 # download mongo-c-driver from github, and compile and install
 cd ..
 MONGOC_VERSION=1.6.1
