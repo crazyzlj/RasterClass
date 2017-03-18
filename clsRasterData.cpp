@@ -663,7 +663,8 @@ clsRasterData<T, MaskT>::_write_single_geotiff(string filename,
                                                float *values) {
     /// 1. Create GeoTiff file driver
     GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName("GTiff");
-    char **papszOptions = poDriver->GetMetadata();
+    // char **papszOptions = poDriver->GetMetadata();
+    char **papszOptions = NULL;
     int nRows = int(header[HEADER_RS_NROWS]);
     int nCols = int(header[HEADER_RS_NCOLS]);
     GDALDataset *poDstDS = poDriver->Create(filename.c_str(), nCols, nRows, 1, GDT_Float32, papszOptions);
