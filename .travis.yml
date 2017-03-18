@@ -4,7 +4,8 @@ services:
 matrix:
   fast_finish: true
   include:
-    - osx_image: xcode8.2
+    - os:osx
+      osx_image: xcode8.2
       language: cpp
       compiler: clang
       sudo: required
