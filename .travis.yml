@@ -4,20 +4,18 @@ services:
 matrix:
   fast_finish: true
   include:
-    - os: 
-      dist: trusty
-      compiler: gcc
+    - osx_image: xcode8.2
       language: cpp
-      sudo: required
+      compiler: clang
       cache:
         apt: true
         directories:
           - $HOME/.ccache
       env:
-        - BUILD_NAME=linux_gcc48
-        - DETAILS=""
+        - BUILD_NAME=osx_xcode
+        - DETAILS="debug build, libtool"
         - ENABLE_CXX11=1
-
+        
 before_install:
   - ./ci/travis/${BUILD_NAME}/before_install.sh
 
