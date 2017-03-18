@@ -12,7 +12,6 @@ GDAL_VERSION=1.11.5
 cd ..
 wget -q http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.gz
 tar xvzf gdal-$GDAL_VERSION.tar.gz
-ls
 cd gdal-$GDAL_VERSION
 ./configure
 make -j 4
@@ -27,8 +26,8 @@ cd mongo-c-driver-$MONGOC_VERSION
 make -j 4
 sudo make install
 sudo ldconfig
-# git clone UtilClass
+# git clone MongoUtilClass and UtilClass
 cd ..
 git clone --depth=50 --branch=master https://github.com/lreis2415/UtilsClass.git
-ls
+git clone --depth=50 --branch=master https://github.com/lreis2415/MongoUtilClass.git
 cd RasterClass
