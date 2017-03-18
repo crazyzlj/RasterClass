@@ -3,7 +3,8 @@
 matrix:
   fast_finish: true
   include:
-    - os: linux
+    - os: 
+      dist: trusty
       compiler: gcc
       language: cpp
       sudo: required
