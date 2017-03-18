@@ -2,7 +2,7 @@
  * \ingroup data
  * \brief Define Raster class to handle raster data
  *
- * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.5.0 is supported)
+ * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.5.0 and later is supported)
  * 2. Array1D and Array2D raster data are supported
  * \author Junzhi Liu, LiangJun Zhu
  * \version 2.0

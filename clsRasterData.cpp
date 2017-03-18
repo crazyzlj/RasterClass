@@ -1,7 +1,7 @@
 /*!
  * \brief Implementation of clsRasterData class
  *
- * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.5.0)
+ * 1. Using GDAL and MongoDB (currently, mongo-c-driver 1.5.0 and later)
  * 2. Array1D and Array2D raster data are supported
  * \author Junzhi Liu, LiangJun Zhu
  * \version 2.0
@@ -1261,7 +1261,7 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
     int oldcellnumber = m_nCells;
     /// initial vectors
     vector <T> values;
-    vector <vector<T>> values2D; /// store layer 2~n
+    vector <vector<T> > values2D; /// store layer 2~n
     vector<int> positionRows;
     vector<int> positionCols;
     int nrows = (int) m_headers[HEADER_RS_NROWS];
@@ -1292,7 +1292,7 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
     /// swap vector to save memory
     vector<T>(values).swap(values);
     if (m_is2DRaster && m_nLyrs > 1) {
-        vector < vector < T > > (values2D).swap(values2D);
+        vector <vector<T> > (values2D).swap(values2D);
     }
     vector<int>(positionRows).swap(positionRows);
     vector<int>(positionCols).swap(positionCols);
@@ -1335,7 +1335,7 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
         /// 1. Get new values and positions according to Mask's position data
         /// initial vectors
         vector <T> values;
-        vector <vector<T>> values2D; /// store layer 2~n data (excluding the first layerS)
+        vector <vector<T> > values2D; /// store layer 2~n data (excluding the first layerS)
         vector<int> positionRows;
         vector<int> positionCols;
         int cols = (int) m_headers[HEADER_RS_NCOLS];
@@ -1421,7 +1421,7 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
         }
         /// swap vector to save memory
         if (m_is2DRaster && m_nLyrs > 1) {
-            vector < vector < T > > (values2D).swap(values2D);
+            vector<vector<T> > (values2D).swap(values2D);
         }
         vector<T>(values).swap(values);
         vector<int>(positionRows).swap(positionRows);
@@ -1458,7 +1458,7 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
             vector<int>::iterator rit = positionRows.begin();
             vector<int>::iterator cit = positionCols.begin();
             typename vector<T>::iterator vit = values.begin();
-            typename vector<vector < T> > ::iterator
+            typename vector<vector<T> > ::iterator
             data2dit = values2D.begin();
             for (typename vector<T>::iterator it = values.begin(); it != values.end();) {
                 int idx = distance(vit, it);
@@ -1487,7 +1487,7 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
             }
             /// swap vector to save memory
             vector<T>(values).swap(values);
-            if (m_is2DRaster && m_nLyrs > 1) vector < vector < T > > (values2D).swap(values2D);
+            if (m_is2DRaster && m_nLyrs > 1) vector <vector<T> > (values2D).swap(values2D);
             vector<int>(positionRows).swap(positionRows);
             vector<int>(positionCols).swap(positionCols);
         }
