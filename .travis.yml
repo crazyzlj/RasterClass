@@ -1,6 +1,4 @@
 # This is the config file for building RasterClass with Travis-ci.org
-services:
-  - mongodb
 matrix:
   fast_finish: true
   include:
@@ -25,6 +23,8 @@ matrix:
         apt: true
         directories:
           - $HOME/.ccache
+      services:
+        - mongodb
       env:
         - BUILD_NAME=linux_gcc48
         - DETAILS=""
