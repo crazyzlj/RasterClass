@@ -31,7 +31,7 @@
 *.app
 bin
 build
-build*
+build*/
 cmake-build*
 
 # IDE related
