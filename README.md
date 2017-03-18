@@ -12,6 +12,7 @@ RasterClass采用CMake进行跨平台代码管理，理论上，支持任何主�
 
 + Linux(Unbuntu 14.04) + GCC-4.8: [![Build Status](http://badges.herokuapp.com/travis/lreis2415/RasterClass?branch=master&env=BUILD_NAME=linux_gcc48&label=linux_gcc48)](https://travis-ci.org/lreis2415/RasterClass)
 + macOS 10.12 + Clang: [![Build Status](http://badges.herokuapp.com/travis/lreis2415/RasterClass?branch=master&env=BUILD_NAME=osx_xcode&label=osx_code)](https://travis-ci.org/lreis2415/RasterClass)
++ Windows_x64 + MSVC 2015: [![Build status](https://ci.appveyor.com/api/projects/status/xa5c17um0kv4yc4i/branch/master?svg=true)](https://ci.appveyor.com/project/crazyzlj/rasterclass/branch/master)
 
 
 ## 1 Introduction
