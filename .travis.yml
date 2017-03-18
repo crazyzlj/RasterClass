@@ -12,11 +12,6 @@ matrix:
         apt: true
         directories:
           - $HOME/.ccache
-      addons:
-        apt:
-          packages:
-          - gdal-bin
-          - libgdal-dev
       env:
         - BUILD_NAME=linux_gcc48
         - DETAILS=""

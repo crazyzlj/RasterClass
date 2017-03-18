@@ -8,7 +8,7 @@ sudo apt-get install -qq gcc-4.8 g++-4.8
 export CXX="g++-4.8" CC="gcc-4.8"
 sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
 # download gdal from osgeo, and compile and install
-#GDAL_VERSION=1.11.5
+GDAL_VERSION=1.11.5
 #cd ..
 #wget -q http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.gz
 #tar xvzf gdal-$GDAL_VERSION.tar.gz
@@ -16,6 +16,8 @@ sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
 #./configure
 #make -j4
 #sudo make install
+# install gdal from apt-get
+sudo apt-get install -qq gdal-bin=$GDAL_VERSION libgdal-dev=$GDAL_VERSION
 # download mongo-c-driver from github, and compile and install
 cd ..
 MONGOC_VERSION=1.6.1
