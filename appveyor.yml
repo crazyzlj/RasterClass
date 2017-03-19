@@ -27,8 +27,8 @@ install:
   - ECHO "Filesystem C:/GDAL:"
   - ps: "ls \"C:/GDAL\""
   # compile mongo-c-driver
-  - appveyor DownloadFile https://github.com/mongodb/mongo-c-driver/archive/1.6.1.zip -FileName mongo-c-driver.zip
-  - 7z x mongo-c-driver.zip -oC:\
+  - appveyor DownloadFile https://github.com/mongodb/mongo-c-driver/releases/download/1.6.1/mongo-c-driver-1.6.1.tar.gz -FileName mongo-c-driver.tar.gz
+  - 7z x mongo-c-driver.tar.gz -oC:\
   - cd C:\mongo-c-driver-1.6.1
   - ps: "ls"
   - cd src\libbson
