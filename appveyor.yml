@@ -47,9 +47,9 @@ build_script:
   - cd C:\projects\rasterclass
   - ps: "ls"
   - mkdir build
+  - cd build
   - cmake -G "Visual Studio 12 2013 Win64" .. -DCMAKE_BUILD_TYPE=Release
   - msbuild.exe ALL_BUILD.vcxproj
   - msbuild.exe INSTALL.vcxproj
 test_script:
-  - ps: "ls"
-  - ./bin/RasterClass
+  - ../bin/RasterClass
