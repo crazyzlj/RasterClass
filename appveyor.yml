@@ -27,8 +27,8 @@ install:
   - ECHO "Filesystem C:/GDAL:"
   - ps: "ls \"C:/GDAL\""
   # compile mongo-c-driver
-  - curl https://github.com/mongodb/mongo-c-driver/archive/1.6.1.zip --output mongocdriver.zip
-  - 7z x mongocdriver.zip -oC:\mongo-c-driver
+  - appveyor DownloadFile https://github.com/mongodb/mongo-c-driver/archive/1.6.1.zip -FileName mongo-c-driver.zip
+  - 7z x mongo-c-driver.zip -oC:\mongo-c-driver
   - cd C:\mongo-c-driver
   - ps: "ls"
   - cd src\libbson
@@ -43,6 +43,7 @@ install:
   - "SET MONGOC_LIB_DIR=C:\\mongo-c-driver\\bin"
   - "SET PATH=C:\\mongo-c-driver\\bin;%PATH%"
 build_script:
+  - cd C:\projects\rasterclass
   - ps: "ls"
   - mkdir build
   - cmake -G "Visual Studio 12 2013 Win64" .. -DCMAKE_BUILD_TYPE=Release
