@@ -28,8 +28,8 @@ install:
   - ps: "ls \"C:/GDAL\""
   # compile mongo-c-driver
   - appveyor DownloadFile https://github.com/mongodb/mongo-c-driver/archive/1.6.1.zip -FileName mongo-c-driver.zip
-  - 7z x mongo-c-driver.zip -oC:\mongo-c-driver
-  - cd C:\mongo-c-driver
+  - 7z x mongo-c-driver.zip -oC:\
+  - cd C:\mongo-c-driver-1.6.1
   - ps: "ls"
   - cd src\libbson
   - cmake -DCMAKE_INSTALL_PREFIX=C:\mongo-c-driver -G "Visual Studio 12 2013 Win64"
