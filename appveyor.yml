@@ -43,6 +43,9 @@ install:
   - "SET MONGOC_ROOT_DIR=C:\\mongo-c-driver"
   - "SET MONGOC_LIB_DIR=C:\\mongo-c-driver\\bin"
   - "SET PATH=C:\\mongo-c-driver\\bin;%PATH%"
+  # clone the dependent libraries
+  - git clone -q --branch=master https://github.com/lreis2415/UtilsClass.git C:\projects\UtilsClass
+  - git clone -q --branch=master https://github.com/lreis2415/MongoUtilClass.git C:\projects\MongoUtilClass
 build_script:
   - cd C:\projects\rasterclass
   - ps: "ls"
