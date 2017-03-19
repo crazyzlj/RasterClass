@@ -1,4 +1,7 @@
 # This is the config file for building RasterClass with Travis-ci.org
+branches:
+  only:
+  - master
 matrix:
   fast_finish: true
   include:
