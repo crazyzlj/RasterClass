@@ -18,7 +18,7 @@ int main(int argc, const char *argv[]) {
     string ascmaskfile = apppath + "../data/mask1.asc";
 
     if (!DirectoryExists("../data/result")) {
-        mkdir("../data/result");
+        CleanDirectory("../data/result");
     }
     string ascdemout = apppath + "../data/result/raster1D_out.asc";
     string ascdemout3 = apppath + "../data/result/raster1D_out_directly.tif";
