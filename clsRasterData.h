@@ -80,19 +80,6 @@ using namespace std;
 #define ASCIIExtension          "asc"
 #define GTiffExtension          "tif"
 
-/*!
- * \brief Coordinate of row and col
- */
-struct RowColCoor {
-public:
-    int row;
-    int col;
-    RowColCoor() : row(-1), col(-1) {};
-    RowColCoor(int y, int x) {
-        row = y;
-        col = x;
-    }
-};
 typedef pair<int, int> RowCol;
 typedef pair<double, double> XYCoor;
 /*!
@@ -449,72 +436,41 @@ public:
     //! Get the spatial reference string
     string getSRSString() { return m_srs; }
 
-    /*! 
+    /*!
      * \brief Get raster data at the valid cell index
      * The default lyr is 1, which means the 1D raster data, or the first layer of 2D data.
      */
-    T getValue(int validCellIndex, int lyr = 1);
-
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-    /*!
-     * \brief Get raster data via {row, col} and lyr (1 as default)
-     *        std::initializer_list need C++11 support.
-     */
-    T getValue(initializer_list<int> poslist, int lyr = 1);
-#else
-    /*!
-     * \brief Get raster data via row and col
-     * The default lyr is 1, which means the 1D raster data, or the first layer of 2D data.
-     */
-    T getValue(RowColCoor pos, int lyr = 1);
-#endif /* C++11 supported in MSVC */
-
-    /*!
-     * \brief Set value to the given position and layer
-     */
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-    inline void setValue(initializer_list<int> poslist, T value, int lyr = 1) {
-        this->_setValue(*poslist.begin(), *(poslist.end() - 1), value, lyr);
-    }
-#else
-    inline void setValue(RowColCoor pos, T value, int lyr = 1); {
-        this->_setValue(pos.row, pos.col, value, lyr);
-    }
-#endif
-
-    /*!
-     * \brief Check if the raster data is NoData via row and col
-     * The default lyr is 1, which means the 1D raster data, or the first layer of 2D data.
-     */
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-    inline T isNoData(initializer_list<int> poslist, int lyr = 1) {
-        return FloatEqual(this->_getValue(*poslist.begin(), *(poslist.end() - 1), lyr), m_noDataValue);
-    }
-#else
-    inline T isNoData(RowColCoor pos, int lyr = 1) {
-        return FloatEqual(this->_getValue(pos.row, pos.col, lyr), m_noDataValue);
-    }
-#endif
+    T getValueByIndex(int validCellIndex, int lyr = 1);
 
     /*!
      * \brief Get raster data at the valid cell index (both for 1D and 2D raster)
      * \return a float array with length as nLyrs
      */
-    void getValue(int validCellIndex, int *nLyrs, T **values);
+    void getValueByIndex(int validCellIndex, int *nLyrs, T **values);
 
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-    /*! 
+    /*!
+     * \brief Get raster data via row and col
+     * The default lyr is 1, which means the 1D raster data, or the first layer of 2D data.
+     */
+    T getValue(int row, int col, int lyr = 1);
+    /*!
      * \brief Get raster data (both for 1D and 2D raster) at the (row, col)
      * \return a float array with length as nLyrs
      */
-    void getValue(initializer_list<int> poslist, int *nLyrs, T **values);
-#else
+    void getValue(int row, int col, int *nLyrs, T **values);
+
     /*!
-     * \brief Get raster data (both for 1D and 2D raster) at the row and col
-     * \return a float array with length as nLyrs
+     * \brief Set value to the given position and layer
      */
-    void getValue(RowColCoor pos, int *nLyrs, T **values);
-#endif /* C++11 supported in MSVC */
+    void setValue(int row, int col, T value, int lyr = 1);
+
+    /*!
+     * \brief Check if the raster data is NoData via row and col
+     * The default lyr is 1, which means the 1D raster data, or the first layer of 2D data.
+     */
+    inline T isNoData(int row, int col, int lyr = 1) {
+        return FloatEqual(this->getValue(row, col, lyr), m_noDataValue);
+    }
 
     //! Is 2D raster data?
     bool is2DRaster() const { return m_is2DRaster; }
@@ -685,20 +641,7 @@ private:
      */
     void _add_other_layer_raster_data(int row, int col, int cellidx, int lyr,
                                       map<string, double> lyrheader, T *lyrdata);
-    /*!
-     * \brief Get raster data via row and col
-     * The default lyr is 1, which means the 1D raster data, or the first layer of 2D data.
-     */
-    T _getValue(int row, int col, int lyr = 1);
-    /*!
-     * \brief Get raster data (both for 1D and 2D raster) at the (row, col)
-     * \return a float array with length as nLyrs
-     */
-    void _getValue(int row, int col, int *nLyrs, T **values);
-    /*!
-     * \brief Set value to the given position and layer
-     */
-    void _setValue(int row, int col, T value, int lyr = 1);
+
 private:
     /*!
      * \brief Operator= without implementation
@@ -1163,7 +1106,7 @@ void clsRasterData<T, MaskT>::getRasterPositionData(int &datalength, int ***posi
 }
 
 template<typename T, typename MaskT>
-T clsRasterData<T, MaskT>::getValue(int validCellIndex, int lyr /* = 1 */) {
+T clsRasterData<T, MaskT>::getValueByIndex(int validCellIndex, int lyr /* = 1 */) {
     if (nullptr == m_rasterData || (m_is2DRaster && nullptr == m_raster2DData)) {
         cout << "Please initialize the raster object first." << endl;
         return m_noDataValue;
@@ -1182,7 +1125,7 @@ T clsRasterData<T, MaskT>::getValue(int validCellIndex, int lyr /* = 1 */) {
 }
 
 template<typename T, typename MaskT>
-T clsRasterData<T, MaskT>::_getValue(int row, int col, int lyr /* = 1 */) {
+T clsRasterData<T, MaskT>::getValue(int row, int col, int lyr /* = 1 */) {
     if (nullptr == m_rasterData || (m_is2DRaster && nullptr == m_raster2DData)) {
         cout << "Please initialize the raster object first." << endl;
     }
@@ -1196,7 +1139,7 @@ T clsRasterData<T, MaskT>::_getValue(int row, int col, int lyr /* = 1 */) {
         if (validCellIndex == -1) {
             return m_noDataValue;
         } else {
-            return this->getValue(validCellIndex, lyr);
+            return this->getValueByIndex(validCellIndex, lyr);
         }
     } else  // get data directly from row and col
     {
@@ -1208,20 +1151,8 @@ T clsRasterData<T, MaskT>::_getValue(int row, int col, int lyr /* = 1 */) {
     }
 }
 
-#if (!defined(MSVC) || _MSC_VER >= 1800)
 template<typename T, typename MaskT>
-T clsRasterData<T, MaskT>::getValue(initializer_list<int> poslist, int lyr /* = 1 */) {
-    return this->_getValue(*poslist.begin(), *(poslist.end() - 1), lyr);
-}
-#else
-template<typename T, typename MaskT>
-T clsRasterData<T, MaskT>::getValue(RowColCoor pos, int lyr /* = 1 */) {
-    return this->_getValue(pos.row, pos.col, lyr);
-}
-#endif /* !defined(MSVC) || _MSC_VER >= 1800 */
-
-template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::_setValue(int row, int col, T value, int lyr /* = 1 */) {
+void clsRasterData<T, MaskT>::setValue(int row, int col, T value, int lyr /* = 1 */) {
     int idx = this->getPosition(row, col);
     if (idx == -1) {
         if (m_is2DRaster) {
@@ -1239,7 +1170,7 @@ void clsRasterData<T, MaskT>::_setValue(int row, int col, T value, int lyr /* = 
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::getValue(int validCellIndex, int *nLyrs, T **values) {
+void clsRasterData<T, MaskT>::getValueByIndex(int validCellIndex, int *nLyrs, T **values) {
     if (nullptr == m_rasterData && (m_is2DRaster && nullptr == m_raster2DData)) {
         cout << "Please first initialize the raster object." << endl;
     }
@@ -1270,31 +1201,15 @@ void clsRasterData<T, MaskT>::getValue(int validCellIndex, int *nLyrs, T **value
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::_getValue(int row, int col, int *nLyrs, T **values) {
+void clsRasterData<T, MaskT>::getValue(int row, int col, int *nLyrs, T **values) {
     int validCellIndex = this->getPosition(row, col);
     if (validCellIndex == -1) {
         *nLyrs = -1;
         *values = nullptr;
     } else {
-        this->getValue(validCellIndex, nLyrs, values);
+        this->getValueByIndex(validCellIndex, nLyrs, values);
     }
 }
-
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::getValue(initializer_list<int> poslist, int *nLyrs, T **values) {
-    int row = *poslist.begin();
-    int col = *(poslist.end() - 1);
-    this->_getValue(row, col, nLyrs, values);
-}
-#else
-template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::getValue(RowColCoor pos, int *nLyrs, T **values) {
-    int row = pos.row;
-    int col = pos.col;
-    this->_getValue(row, col, nLyrs, values);
-}
-#endif /* !defined(MSVC) || _MSC_VER >= 1800 */
 
 /************* Output to file functions ***************/
 
@@ -2039,10 +1954,10 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
     if (m_is2DRaster && m_nLyrs > 1) {
         vector<vector<T> >(values2D).swap(values2D);
     }
-    // vector<int>(positionRows).swap(positionRows);
-    // vector<int>(positionCols).swap(positionCols);
-    positionRows.shrink_to_fit();
-    positionCols.shrink_to_fit();
+    vector<int>(positionRows).swap(positionRows);
+    vector<int>(positionCols).swap(positionCols);
+    // positionRows.shrink_to_fit();
+    // positionCols.shrink_to_fit();
     /// reCreate raster data array
     m_nCells = (int) values.size();
     m_headers.at(HEADER_RS_CELLSNUM) = m_nCells;
@@ -2130,11 +2045,7 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
             for (int i = 0; i < maskRows; ++i) {
                 for (int j = 0; j < maskCols; ++j) {
                     /// check mask data
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-                    if (FloatEqual(m_mask->getValue({i, j}), m_mask->getNoDataValue())) continue;
-#else
-                    if (FloatEqual(m_mask->getValue(RowColCoor(i, j)), m_mask->getNoDataValue())) continue;
-#endif /* C++11 supported in MSVC */
+                    if (FloatEqual(m_mask->getValue(i, j), m_mask->getNoDataValue())) continue;
 
                     XYCoor tmpXY = m_mask->getCoordinateByRowCol(i, j);
                     /// get current raster value by XY
@@ -2168,12 +2079,12 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
         if (m_is2DRaster && m_nLyrs > 1) {
             vector<vector<T> >(values2D).swap(values2D);
         }
-        // vector<T>(values).swap(values);
-        // vector<int>(positionRows).swap(positionRows);
-        // vector<int>(positionCols).swap(positionCols);
-        values.shrink_to_fit();
-        positionRows.shrink_to_fit();
-        positionCols.shrink_to_fit();
+        vector<T>(values).swap(values);
+        vector<int>(positionRows).swap(positionRows);
+        vector<int>(positionCols).swap(positionCols);
+        //values.shrink_to_fit();
+        //positionRows.shrink_to_fit();
+        //positionCols.shrink_to_fit();
         /// 2. Use the extent of Mask data or not.
         /// overwrite header information by Mask's
         this->copyHeader(m_mask->getRasterHeader());
@@ -2238,10 +2149,10 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
             if (m_is2DRaster && m_nLyrs > 1) {
                 vector<vector<T> >(values2D).swap(values2D);
             }
-            // vector<int>(positionRows).swap(positionRows);
-            // vector<int>(positionCols).swap(positionCols);
-            positionRows.shrink_to_fit();
-            positionCols.shrink_to_fit();
+            vector<int>(positionRows).swap(positionRows);
+            vector<int>(positionCols).swap(positionCols);
+            // positionRows.shrink_to_fit();
+            // positionCols.shrink_to_fit();
         }
         /// 3. Create new raster data, considering valid data only or not.
         m_storePositions = true;

@@ -63,11 +63,7 @@ int main(int argc, const char *argv[]) {
     cout << "mean: " << readr.getAverage() << ", max: " << readr.getMaximum() << endl;
     cout << "min: " << readr.getMinimum() << ", std: " << readr.getSTD() << endl;
     /// get value
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-    cout << "value on (1, 1), C++11 version: " << readr.getValue({1, 1}) << endl;
-#else
-    cout << "value on (1, 1): " << readr.getValue(RowColCoor(1, 1)) << endl;
-#endif /* C++11 supported in MSCV */
+    cout << "value on (1, 1): " << readr.getValue(1, 1) << endl;
     cout << endl << endl;
     /// 3. Output raster to file
     readr.outputToFile(ascdemout);
@@ -95,11 +91,9 @@ int main(int argc, const char *argv[]) {
     /// get value
     int nlyrs = 0;
     float *cellvalues = nullptr;
-#if (!defined(MSVC) || _MSC_VER >= 1800)
-    readr2D.getValue({5, 5}, &nlyrs, &cellvalues);
-#else
-    readr2D.getValue(RowColCoor(5, 5), &nlyrs, &cellvalues);
-#endif /* C++11 supported in MSVC */
+
+    readr2D.getValue(5, 5, &nlyrs, &cellvalues);
+
     if (nlyrs > 0 && nullptr != cellvalues) {
         cout << "there are " << nlyrs << " layers, and value on (1, 1) are: ";
         for (int i = 0; i < nlyrs; i++) {
