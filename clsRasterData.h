@@ -4,6 +4,8 @@
  *        1. Using GDAL and MongoDB (currently, mongo-c-driver 1.5.0+ is supported)
  *        2. Array1D and Array2D raster data are supported
  *        3. C++11 supported
+ *        4. Unit Tests based Google Test.
+ *
  * \author Junzhi Liu, LiangJun Zhu
  * \version 2.1
  * \date Apr. 2011
@@ -13,6 +15,7 @@
  *          Apr. 2017 lj Avoid try...catch block
  *          May. 2017 lj Use MongoDB wrapper
  *          Nov. 2017 lj Code review based on C++11 and use a single header file.
+ *          Dec. 2017 lj Add Unittest based on Google Test.
  */
 #ifndef CLS_RASTER_DATA
 #define CLS_RASTER_DATA
@@ -20,7 +23,6 @@
 /// include MongoDB, optional
 #ifdef USE_MONGODB
 #include "MongoUtil.h"
-
 #endif /* USE_MONGODB */
 /// include utility functions
 #include "utilities.h"
@@ -101,7 +103,6 @@ public:
 
     /*!
      * \brief Constructor of clsRasterData instance from TIFF, ASCII, or other GDAL supported raster file
-     * Support 1D and/or 2D raster data
      * \sa ReadASCFile() ReadFromGDAL()
      * \param[in] filename Full path of the raster file
      * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
@@ -383,7 +384,7 @@ public:
     //! Get NoDATA value of raster data
     T getNoDataValue() const { return (T) m_headers.at(HEADER_RS_NODATA); }
 
-    //! Get position index in 1D raster data for specific row and column, return -1 is error occurs.
+    //! Get position index in 1D raster data for specific row and column, return -1 if error occurs.
     int getPosition(int row, int col);
 
     //! Get position index in 1D raster data for given coordinate (x,y)
@@ -1024,7 +1025,7 @@ void clsRasterData<T, MaskT>::getStatistics(string sindex, int *lyrnum, double *
 
 template<typename T, typename MaskT>
 int clsRasterData<T, MaskT>::getPosition(int row, int col) {
-    if (m_calcPositions || nullptr == m_rasterPositionData) {
+    if (!m_calcPositions || nullptr == m_rasterPositionData) {
         return this->getCols() * row + col;
     }
     for (int i = 0; i < m_nCells; i++) {
