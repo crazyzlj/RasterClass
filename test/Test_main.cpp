@@ -20,7 +20,13 @@
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
+
     GDALAllRegister();  // Register GDAL drivers, REQUIRED!
+    // Create new directory for outputs if not exists.
+    string apppath = GetAppPath();
+    string resultpath = apppath + "../data/result";
+    if (!DirectoryExists(resultpath)) CleanDirectory(resultpath);
+
 #if (defined _DEBUG) && (defined _MSC_VER) && (defined VLD)
     // Get a checkpoint of the memory after Google Test has been initialized. (not finished yet! by lj)
     // Solving the memory leak problem caused by Google test in an imperfect way in MSVC with VLD.

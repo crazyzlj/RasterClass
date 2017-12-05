@@ -14,8 +14,6 @@
 #include "utilities.h"
 #include "clsRasterData.h"
 
-using namespace std;
-
 namespace {
 #if GTEST_HAS_PARAM_TEST
 
@@ -38,10 +36,6 @@ public:
     clsRasterDataTestDefault() : rs(nullptr) {}
     ~clsRasterDataTestDefault() override { delete rs; }
     void SetUp() override {
-        // Create new directory for outputs if not exists.
-        if (!DirectoryExists("../data/result")) {
-            CleanDirectory("../data/result");
-        }
         rs = new clsRasterData<float>(GetParam());
         ASSERT_NE(nullptr, rs);
     }
@@ -73,7 +67,7 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
     EXPECT_FALSE(rs->MaskExtented());  // m_useMaskExtent
     EXPECT_FALSE(rs->StatisticsCalculated());  // m_statisticsCalculated
 
-    EXPECT_TRUE(rs->validate_raster_data());
+    ASSERT_TRUE(rs->validate_raster_data());
 
     EXPECT_NE(nullptr, rs->getRasterDataPointer());  // m_rasterData
     EXPECT_EQ(nullptr, rs->get2DRasterDataPointer());  // m_raster2DData
@@ -100,15 +94,36 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
 
     EXPECT_EQ(nullptr, rs->getMask());  // m_mask
 
+    /** Test getting position data **/
+    int ncells = -1;
+    int** positions = nullptr;
+    rs->getRasterPositionData(&ncells, &positions);  // m_rasterPositionData
+    EXPECT_EQ(541, ncells);
+    EXPECT_NE(nullptr, positions);
+    // index = 0, row = 0 and col = 1
+    EXPECT_EQ(0, positions[0][0]);
+    EXPECT_EQ(1, positions[0][1]);
+    // index = 540, row = 19 and col = 29
+    EXPECT_EQ(19, positions[540][0]);
+    EXPECT_EQ(29, positions[540][1]);
+
+
     /** Test getting raster data **/
-    int nrows = 0;
+    ncells = -1;
     float *rs_data = nullptr;
-    EXPECT_TRUE(rs->getRasterData(&nrows, &rs_data));  // m_rasterData
-    EXPECT_EQ(541, nrows);
+    EXPECT_TRUE(rs->getRasterData(&ncells, &rs_data));  // m_rasterData
+    EXPECT_EQ(541, ncells);
     EXPECT_NE(nullptr, rs_data);
     EXPECT_FLOAT_EQ(9.9f, rs_data[0]);
-    EXPECT_FLOAT_EQ(7.21, rs_data[540]);
+    EXPECT_FLOAT_EQ(7.21f, rs_data[540]);
     EXPECT_FLOAT_EQ(9.43f, rs_data[29]);
+
+    float** rs_2ddata = nullptr;
+    int nlyrs = -1;
+    EXPECT_FALSE(rs->get2DRasterData(&ncells, &nlyrs, &rs_2ddata));  // m_raster2DData
+    EXPECT_EQ(-1, ncells);
+    EXPECT_EQ(-1, nlyrs);
+    EXPECT_EQ(nullptr, rs_2ddata);
 
     /** Get raster cell value by various way **/
     EXPECT_FLOAT_EQ(-9999.f, rs->getValueByIndex(-1));
@@ -160,24 +175,33 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
 
     /** Set value **/
     // Set core file name
-    string newcorename = corename + "_new";
+    string newcorename = corename + "_new_1Ddefault";
     rs->setCoreName(newcorename);
     EXPECT_EQ(newcorename, rs->getCoreName());
 
     // Set raster data value
-    rs->setValue(2, 4, 18.06f);
-    EXPECT_FLOAT_EQ(18.06f, rs->getValue(2, 4));
+    rs->setValue(2, 4, 0.806f);
+    EXPECT_FLOAT_EQ(0.806f, rs->getValue(2, 4));
     rs->setValue(0, 0, 1.f);
     EXPECT_NE(1.f, rs->getValue(0, 0));
     EXPECT_FLOAT_EQ(-9999.f, rs->getValue(0, 0));
 
+    // update statistics
+    rs->updateStatistics();  // Should be mannualy invoked in your project!
+    EXPECT_FLOAT_EQ(0.806f, rs->getMinimum());
+    EXPECT_FLOAT_EQ(9.19171165f, rs->getAverage());
+    EXPECT_FLOAT_EQ(5.62426552f, rs->getSTD());
+    EXPECT_FLOAT_EQ(97.684f, rs->getRange());
+
     /** Output to new file **/
     string oldfullname = rs->getFilePath();
-    string newfullname = GetPathFromFullName(oldfullname) + SEP + newcorename + "." + GetSuffix(oldfullname);
-    rs->outputToFile(newfullname);
+    string fakefullname = GetPathFromFullName(oldfullname) + "noExistDir" + SEP + "noOut.tif";
+    //EXPECT_FALSE(rs->outputToFile(fakefullname));
+    string newfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
+                         newcorename + "." + GetSuffix(oldfullname);
+    EXPECT_TRUE(rs->outputToFile(newfullname));
     EXPECT_TRUE(FileExists(newfullname));
 }
-
 
 // In order to run value-parameterized tests, you need to instantiate them,
 // or bind them to a list of values which will be used as test parameters.
@@ -187,7 +211,8 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
 // Here, we instantiate our tests with a list of two PrimeTable object
 // factory functions:
 INSTANTIATE_TEST_CASE_P(SingleLayerWithDefaultParam, clsRasterDataTestDefault,
-                        Values(asc_file_chars, tif_file_chars));
+                        Values(asc_file_chars,
+                               tif_file_chars));
 #else
 //Google Test may not support value-parameterized tests with some
 //compilers. If we use conditional compilation to compile out all
