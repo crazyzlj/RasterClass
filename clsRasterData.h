@@ -219,19 +219,19 @@ public:
      * \brief Write raster to raster file, if 2D raster, output name will be filename_LyrNum
      * \param filename filename with prefix, e.g. ".asc" and ".tif"
      */
-    void outputToFile(string filename);
+    bool outputToFile(string filename);
 
     /*!
      * \brief Write 1D or 2D raster data into ASC file(s)
      * \param[in] filename \a string, output ASC file path, take the CoreName as prefix
      */
-    void outputASCFile(string filename);
+    bool outputASCFile(string filename);
 
     /*!
      * \brief Write 1D or 2D raster data into TIFF file by GDAL
      * \param[in] filename \a string, output TIFF file path
      */
-    void outputFileByGDAL(string filename);
+    bool outputFileByGDAL(string filename);
 
 #ifdef USE_MONGODB
     /*!
@@ -413,12 +413,12 @@ public:
     /*! \brief Get raster data, include valid cell number and data
      * \return true if the raster data has been initialized, otherwise return false and print error info.
      */
-    bool getRasterData(int *nRows, T **data);
+    bool getRasterData(int *nCells, T **data);
 
     /*! \brief Get 2D raster data, include valid cell number of each layer, layer number, and data
      * \return true if the 2D raster has been initialized, otherwise return false and print error info.
      */
-    bool get2DRasterData(int *nRows, int *nCols, T ***data);
+    bool get2DRasterData(int *nCells, int *nLyrs, T ***data);
 
     //! Get raster header information
     const map<string, double> &getRasterHeader() const { return m_headers; }
@@ -437,7 +437,7 @@ public:
      * \param[out] datalength
      * \param[out] positiondata, the pointer of 2D array (pointer)
      */
-    void getRasterPositionData(int &datalength, int ***positiondata);
+    void getRasterPositionData(int *datalength, int ***positiondata);
 
     //! Get pointer of raster data
     T *getRasterDataPointer() const { return m_rasterData; }
@@ -507,10 +507,13 @@ public:
      * \brief Validate the available of raster data, both 1D and 2D data
      */
     inline bool validate_raster_data() {
-        if (nullptr == m_rasterData || (m_is2DRaster && nullptr == m_raster2DData)) {
+        if ((!m_is2DRaster && nullptr != m_rasterData) ||  // Valid 1D raster
+            (m_is2DRaster && nullptr != m_raster2DData)) { // Valid 2D raster
+            return true;
+        } else {
             cout << "Please initialize the raster object first." << endl;
             return false;
-        } else return true;
+        }
     }
 
     /*!
@@ -626,9 +629,9 @@ private:
      * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
      * \param[in] mask \a clsRasterData<T2> Mask layer
      * \param[in] useMaskExtent Use mask layer extent, even NoDATA exists.
-     *
+     * \return true if read successfully, otherwise return false.
      */
-    void _construct_from_single_file(string filename, bool calcPositions = true, clsRasterData<MaskT> *mask = nullptr,
+    bool _construct_from_single_file(string filename, bool calcPositions = true, clsRasterData<MaskT> *mask = nullptr,
                                      bool useMaskExtent = true, T defalutValue = (T) NODATA_VALUE);
 
     /*!
@@ -636,16 +639,19 @@ private:
      * \param[in] ascFileName \a string
      * \param[out] header Raster header information
      * \param[out] values Raster data matrix
+     * \return true if read successfully, otherwise return false.
      */
-    void _read_asc_file(string ascFileName, map<string, double> *header, T **values);
+    bool _read_asc_file(string ascFileName, map<string, double> *header, T **values);
 
     /*!
      * \brief Read raster data by GDAL, the simply usage
      * \param[in] filename \a string
      * \param[out] header Raster header information
      * \param[out] values Raster data matrix
+     * \return true if read successfully, otherwise return false.
      */
-    void _read_raster_file_by_gdal(string filename, map<string, double> *header, T **values, string *srs = nullptr);
+    bool _read_raster_file_by_gdal(string filename, map<string, double> *header,
+                                   T **values, string *srs = nullptr);
 
     /*!
      * \brief Extract by mask data and calculate position index, if necessary.
@@ -675,7 +681,7 @@ private:
      * \param[in] srs Coordinate system string
      * \param[in] values float raster data array
      */
-    void _write_single_geotiff(string filename, map<string, double> &header, string srs, float *values);
+    bool _write_single_geotiff(string filename, map<string, double> &header, string srs, float *values);
 
 #ifdef USE_MONGODB
     /*!
@@ -730,9 +736,9 @@ private:
     string m_coreFileName;
     ///< OGRSpatialReference
     string m_srs;
-    ///< 1D raster data or the first layer of 2D raster data.
+    ///< 1D raster data
     T *m_rasterData;
-    ///< 2D raster data
+    ///< 2D raster data, [cellIndex][layer]
     T **m_raster2DData;
     ///< cell index (row, col) in m_rasterData or the first layer of m_raster2DData (2D array)
     int **m_rasterPositionData;
@@ -774,7 +780,7 @@ void clsRasterData<T, MaskT>::_initialize_raster_class() {
     m_rasterData = nullptr;
     m_rasterPositionData = nullptr;
     m_mask = nullptr;
-    m_nLyrs = 1;
+    m_nLyrs = -1;
     m_is2DRaster = false;
     m_raster2DData = nullptr;
     m_calcPositions = false;
@@ -845,12 +851,18 @@ clsRasterData<T, MaskT>::clsRasterData(vector<string> filenames, bool calcPositi
     }
     /// if filenames has only one file
     if (filenames.size() == 1) {
-        this->_construct_from_single_file(filenames[0], calcPositions, mask, useMaskExtent, defalutValue);
+        if (!this->_construct_from_single_file(filenames[0], calcPositions, mask,
+                                               useMaskExtent, defalutValue)) {
+            return;
+        }
     } else {  /// construct from multi-layers file
         m_nLyrs = (int) filenames.size();
         /// 1. firstly, take the first layer as the main input, to calculate position index or
         ///    extract by mask if stated.
-        this->_construct_from_single_file(filenames[0], calcPositions, mask, useMaskExtent, defalutValue);
+        if (!this->_construct_from_single_file(filenames[0], calcPositions, mask,
+                                               useMaskExtent, defalutValue)) {
+            return;
+        }
         /// 2. then, change the core file name and file path template which format is: <file dir>/CoreName_%d.<suffix>
         m_coreFileName = SplitString(m_coreFileName, '_')[0];
         m_filePathName = GetPathFromFullName(filenames[0]) + SEP + m_coreFileName + "_%d." + GetSuffix(filenames[0]);
@@ -953,7 +965,7 @@ bool clsRasterData<T, MaskT>::_check_raster_file_exists(vector<string> &filename
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::_construct_from_single_file(string filename, bool calcPositions /* = true */,
+bool clsRasterData<T, MaskT>::_construct_from_single_file(string filename, bool calcPositions /* = true */,
                                                           clsRasterData<MaskT> *mask /* = nullptr */,
                                                           bool useMaskExtent /* = true */,
                                                           T defalutValue /* = (T) NODATA_VALUE */) {
@@ -965,13 +977,18 @@ void clsRasterData<T, MaskT>::_construct_from_single_file(string filename, bool 
     m_useMaskExtent = useMaskExtent;
     m_defaultValue = defalutValue;
 
+    bool readflag = false;
     if (StringMatch(GetUpper(GetSuffix(filename)), ASCIIExtension)) {
-        _read_asc_file(m_filePathName, &m_headers, &m_rasterData);
+        readflag = _read_asc_file(m_filePathName, &m_headers, &m_rasterData);
     } else {
-        _read_raster_file_by_gdal(m_filePathName, &m_headers, &m_rasterData, &m_srs);
+        readflag = _read_raster_file_by_gdal(m_filePathName, &m_headers, &m_rasterData, &m_srs);
     }
-    /******** Mask and calculate valid positions ********/
-    this->_mask_and_calculate_valid_positions();
+    if (readflag) {
+        if (m_nLyrs < 0) m_nLyrs = 1;
+        /******** Mask and calculate valid positions ********/
+        this->_mask_and_calculate_valid_positions();
+        return true;
+    }else return false;
 }
 
 template<typename T, typename MaskT>
@@ -1032,8 +1049,12 @@ void clsRasterData<T, MaskT>::updateStatistics() {
 }
 
 template<typename T, typename MaskT>
-double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr) {
+double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr /* = 1 */) {
     sindex = GetUpper(sindex);
+    if (!this->validate_raster_data() || !this->validate_layer(lyr)) {
+        cout << "No available raster statistics!" << endl;
+        return m_noDataValue;
+    }
     if (this->m_is2DRaster && nullptr != m_raster2DData)  // for 2D raster data
     {
         map<string, double *>::iterator it = m_statsMap2D.find(sindex);
@@ -1117,6 +1138,12 @@ int clsRasterData<T, MaskT>::getPosition(double x, double y) {
     int nRows = this->getRows();
     int nCols = this->getCols();
 
+    if (FloatEqual(xllCenter, (double) NODATA_VALUE) || FloatEqual(yllCenter, (double) NODATA_VALUE) ||
+        FloatEqual(dx, NODATA_VALUE) || nRows < 0 || nCols < 0) {
+        cout << "No available header information!" << endl;
+        return -2;
+    }
+
     double xmin = xllCenter - dx / 2.;
     double xMax = xmin + dx * nCols;
     if (x > xMax || x < xllCenter) {
@@ -1136,36 +1163,46 @@ int clsRasterData<T, MaskT>::getPosition(double x, double y) {
 }
 
 template<typename T, typename MaskT>
-bool clsRasterData<T, MaskT>::getRasterData(int *nRows, T **data) {
-    if (!this->validate_raster_data()) return false;
-    *nRows = m_nCells;
-    *data = m_rasterData;
-    return true;
+bool clsRasterData<T, MaskT>::getRasterData(int *nCells, T **data) {
+    if (this->validate_raster_data() && !m_is2DRaster) {
+        *nCells = m_nCells;
+        *data = m_rasterData;
+        return true;
+    }
+    *nCells = -1;
+    *data = nullptr;
+    return false;
 }
 
 template<typename T, typename MaskT>
-bool clsRasterData<T, MaskT>::get2DRasterData(int *nRows, int *nCols, T ***data) {
-    if (m_is2DRaster && nullptr != m_raster2DData) {
-        *nRows = m_nCells;
-        *nCols = m_nLyrs;
+bool clsRasterData<T, MaskT>::get2DRasterData(int *nCells, int *nLyrs, T ***data) {
+    if (this->validate_raster_data() && m_is2DRaster) {
+        *nCells = m_nCells;
+        *nLyrs = m_nLyrs;
         *data = m_raster2DData;
         return true;
-    } else {
-        cout << "claRasterData\nget2DRasterData\nPlease initialize the raster object first." << endl;
-        return false;
     }
+    *nCells = -1;
+    *nLyrs = -1;
+    *data = nullptr;
+    return false;
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::getRasterPositionData(int &datalength, int ***positiondata) {
+void clsRasterData<T, MaskT>::getRasterPositionData(int *datalength, int ***positiondata) {
     if (nullptr != m_mask && m_mask->PositionsCalculated() && m_useMaskExtent) {
         m_mask->getRasterPositionData(datalength, positiondata);
-    } else if (m_calcPositions) {
-        datalength = m_nCells;
+    } else if (m_calcPositions && nullptr != m_rasterPositionData) {
+        *datalength = m_nCells;
         *positiondata = m_rasterPositionData;
     } else {// reCalculate position data
+        if (!this->validate_raster_data()) {
+            *datalength = -1;
+            *positiondata = nullptr;
+            return;
+        }
         _calculate_valid_positions_from_grid_data();
-        datalength = m_nCells;
+        *datalength = m_nCells;
         *positiondata = m_rasterPositionData;
     }
 }
@@ -1217,7 +1254,7 @@ T clsRasterData<T, MaskT>::getValue(int row, int col, int lyr /* = 1 */) {
         return this->getValueByIndex(validCellIndex, lyr);
     } else  // get data directly from row and col
     {
-        if (m_is2DRaster && nullptr != m_raster2DData) {
+        if (m_is2DRaster) {
             return m_raster2DData[row * this->getCols() + col][lyr - 1];
         } else {
             return m_rasterData[row * this->getCols() + col];
@@ -1276,7 +1313,7 @@ void clsRasterData<T, MaskT>::setValue(int row, int col, T value, int lyr /* = 1
         cout << "Current version do not support to setting value to NoDATA location!" << endl;
     } else {
         if (m_is2DRaster) {
-            m_raster2DData[idx][lyr] = value;
+            m_raster2DData[idx][lyr - 1] = value;
         } else {
             m_rasterData[idx] = value;
         }
@@ -1287,14 +1324,15 @@ void clsRasterData<T, MaskT>::setValue(int row, int col, T value, int lyr /* = 1
 /************* Output to file functions ***************/
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::outputToFile(string filename) {
+bool clsRasterData<T, MaskT>::outputToFile(string filename) {
+    if (!this->validate_raster_data()) return false;
     string filetype = GetUpper(GetSuffix(filename));
     if (StringMatch(filetype, ASCIIExtension)) {
-        outputASCFile(filename);
+        return outputASCFile(filename);
     } else if (StringMatch(filetype, GTiffExtension)) {
-        outputFileByGDAL(filename);
+        return outputFileByGDAL(filename);
     } else {
-        outputFileByGDAL(ReplaceSuffix(filename, string(GTiffExtension)));
+        return outputFileByGDAL(ReplaceSuffix(filename, string(GTiffExtension)));
     }
 }
 
@@ -1316,17 +1354,17 @@ void clsRasterData<T, MaskT>::_write_ASC_headers(string filename, map<string, do
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::outputASCFile(string filename) {
+bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
     /// 1. Is there need to calculate valid position index?
     int count;
     int **position = nullptr;
     bool outputdirectly = true;
     if (m_calcPositions && nullptr != m_rasterPositionData) {
-        this->getRasterPositionData(count, &position);
+        this->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
     } else if (m_useMaskExtent && nullptr != m_mask) {
-        m_mask->getRasterPositionData(count, &position);
+        m_mask->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
     }
@@ -1347,6 +1385,10 @@ void clsRasterData<T, MaskT>::outputASCFile(string filename) {
             this->_write_ASC_headers(tmpfilename, m_headers);
             // write data
             ofstream rasterFile(tmpfilename.c_str(), ios::app | ios::out);
+            if (!rasterFile.is_open()) {
+                cout << "Error opening file: " << tmpfilename << endl;
+                return false;
+            }
             int index = 0;
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
@@ -1366,6 +1408,10 @@ void clsRasterData<T, MaskT>::outputASCFile(string filename) {
         }
     } else {  /// 3.2 1D raster data
         ofstream rasterFile(filename.c_str(), ios::app | ios::out);
+        if (!rasterFile.is_open()) {
+            cout << "Error opening file: " << filename << endl;
+            return false;
+        }
         int index = 0;
         for (int i = 0; i < rows; ++i) {
             for (int j = 0; j < cols; ++j) {
@@ -1386,24 +1432,25 @@ void clsRasterData<T, MaskT>::outputASCFile(string filename) {
         rasterFile.close();
     }
     position = nullptr;
+    return true;
 }
 
 template<typename T, typename MaskT>
-void
-clsRasterData<T, MaskT>::_write_single_geotiff(string filename,
-                                               map<string, double> &header,
-                                               string srs,
-                                               float *values) {
+bool clsRasterData<T, MaskT>::_write_single_geotiff(string filename,
+                                                    map<string, double> &header,
+                                                    string srs, float *values) {
     /// 1. Create GeoTiff file driver
     GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName("GTiff");
-    // char **papszOptions = poDriver->GetMetadata();
+    if (nullptr == poDriver) return false;
     char **papszOptions = nullptr;
     int nRows = int(header.at(HEADER_RS_NROWS));
     int nCols = int(header.at(HEADER_RS_NCOLS));
     GDALDataset *poDstDS = poDriver->Create(filename.c_str(), nCols, nRows, 1, GDT_Float32, papszOptions);
+    if (nullptr == poDstDS) return false;
     /// 2. Write raster data
     GDALRasterBand *poDstBand = poDstDS->GetRasterBand(1);
     poDstBand->RasterIO(GF_Write, 0, 0, nCols, nRows, values, nCols, nRows, GDT_Float32, 0, 0);
+    if (nullptr == poDstBand) return false;
     poDstBand->SetNoDataValue(header.at(HEADER_RS_NODATA));
     /// 3. Writer header information
     double geoTrans[6];
@@ -1416,20 +1463,22 @@ clsRasterData<T, MaskT>::_write_single_geotiff(string filename,
     poDstDS->SetGeoTransform(geoTrans);
     poDstDS->SetProjection(srs.c_str());
     GDALClose(poDstDS);
+
+    return true;
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
+bool clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
     /// 1. Is there need to calculate valid position index?
     int count;
     int **position = nullptr;
     bool outputdirectly = true;
     if (nullptr != m_rasterPositionData) {
-        this->getRasterPositionData(count, &position);
+        this->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
     } else if (m_useMaskExtent && nullptr != m_mask) {
-        m_mask->getRasterPositionData(count, &position);
+        m_mask->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
     }
@@ -1461,8 +1510,9 @@ void clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
                     }
                 }
             }
-            this->_write_single_geotiff(tmpfilename, m_headers, m_srs, rasterdata1D);
+            bool outflag = this->_write_single_geotiff(tmpfilename, m_headers, m_srs, rasterdata1D);
             Release1DArray(rasterdata1D);
+            if (!outflag) return false;
         }
     } else {  /// 3.2 1D raster data
         float *rasterdata1D = nullptr;
@@ -1493,11 +1543,13 @@ void clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
                 }
             }
         }
-        this->_write_single_geotiff(filename, m_headers, m_srs, rasterdata1D);
+        bool outflag = this->_write_single_geotiff(filename, m_headers, m_srs, rasterdata1D);
         if (!newbuilddata) { rasterdata1D = nullptr; }
         else { Release1DArray(rasterdata1D); }
+        if (!outflag) return false;
     }
     position = nullptr;
+    return true;
 }
 
 #ifdef USE_MONGODB
@@ -1508,10 +1560,10 @@ void clsRasterData<T, MaskT>::outputToMongoDB(string filename, MongoGridFS *gfs)
     int **position;
     bool outputdirectly = true;
     if (m_calcPositions && nullptr != m_rasterPositionData) {
-        this->getRasterPositionData(count, &position);
+        this->getRasterPositionData(&count, &position);
         outputdirectly = false;
     } else if (m_useMaskExtent && nullptr != m_mask) {
-        m_mask->getRasterPositionData(count, &position);
+        m_mask->getRasterPositionData(&count, &position);
         outputdirectly = false;
     }
     /// 2. Get raster data
@@ -1599,8 +1651,7 @@ bool clsRasterData<T, MaskT>::ReadFromFile(string filename, bool calcPositions /
                                            T defalutValue /* = (T) NODATA_VALUE */) {
     if (!this->_check_raster_file_exists(filename)) return false;
     this->_initialize_raster_class();
-    this->_construct_from_single_file(filename, calcPositions, mask, useMaskExtent, defalutValue);
-    return true;
+    return this->_construct_from_single_file(filename, calcPositions, mask, useMaskExtent, defalutValue);
 }
 
 template<typename T, typename MaskT>
@@ -1701,7 +1752,7 @@ void clsRasterData<T, MaskT>::ReadFromMongoDB(MongoGridFS *gfs,
 #endif /* USE_MONGODB */
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::_read_asc_file(string ascFileName, map<string, double> *header, T **values) {
+bool clsRasterData<T, MaskT>::_read_asc_file(string ascFileName, map<string, double> *header, T **values) {
     StatusMessage(("Read " + ascFileName + "...").c_str());
     ifstream rasterFile(ascFileName.c_str());
     string tmp, xlls, ylls;
@@ -1722,7 +1773,7 @@ void clsRasterData<T, MaskT>::_read_asc_file(string ascFileName, map<string, dou
     tmpheader.insert(make_pair(HEADER_RS_CELLSIZE, tempFloat));
     rasterFile >> tmp >> noData;
     tmpheader.insert(make_pair(HEADER_RS_NODATA, noData));
-    m_noDataValue = (T) noData;
+    m_noDataValue = noData;
     /// default is center, if corner, then:
     if (StringMatch(xlls, "XLLCORNER")) tmpheader.at(HEADER_RS_XLL) += 0.5 * tmpheader.at(HEADER_RS_CELLSIZE);
     if (StringMatch(ylls, "YLLCORNER")) tmpheader.at(HEADER_RS_YLL) += 0.5 * tmpheader.at(HEADER_RS_CELLSIZE);
@@ -1741,16 +1792,17 @@ void clsRasterData<T, MaskT>::_read_asc_file(string ascFileName, map<string, dou
     /// returned parameters
     *header = tmpheader;
     *values = tmprasterdata;
+    return true;
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<string, double> *header, T **values,
-                                                        string *srs /* = nullptr */) {
+bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<string, double> *header,
+                                                        T **values, string *srs /* = nullptr */) {
     StatusMessage(("Read " + filename + "...").c_str());
     GDALDataset *poDataset = (GDALDataset *) GDALOpen(filename.c_str(), GA_ReadOnly);
     if (nullptr == poDataset) {
         cout << "Open file " + filename + " failed." << endl;
-        return;
+        return false;
     }
     //cout<<poDataset->GetRasterCount()<<endl;
     GDALRasterBand *poBand = poDataset->GetRasterBand(1);
@@ -1759,7 +1811,7 @@ void clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
     int nCols = poBand->GetXSize();
     tmpheader.insert(make_pair(HEADER_RS_NCOLS, (double) nCols));
     tmpheader.insert(make_pair(HEADER_RS_NROWS, (double) nRows));
-    tmpheader.insert(make_pair(HEADER_RS_NODATA, (double) poBand->GetNoDataValue()));
+    tmpheader.insert(make_pair(HEADER_RS_NODATA, poBand->GetNoDataValue()));
     m_noDataValue = (T) poBand->GetNoDataValue();
     double adfGeoTransform[6];
     poDataset->GetGeoTransform(adfGeoTransform);
@@ -1838,6 +1890,7 @@ void clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
     *header = tmpheader;
     *values = tmprasterdata;
     *srs = tmpsrs;
+    return true;
 }
 
 template<typename T, typename MaskT>
@@ -2078,7 +2131,7 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
             /// Get the position data from mask
             int nValidMaskNumber;
             int **validPosition = nullptr;
-            m_mask->getRasterPositionData(nValidMaskNumber, &validPosition);
+            m_mask->getRasterPositionData(&nValidMaskNumber, &validPosition);
             /// Get the valid data according to coordinate
             for (int i = 0; i < nValidMaskNumber; ++i) {
                 int tmpRow = validPosition[i][0];
@@ -2230,7 +2283,7 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
         /// 3. Create new raster data, considering valid data only or not.
         m_storePositions = true;
         if (nullptr != m_mask && m_mask->PositionsCalculated() && m_useMaskExtent && sameExtentWithMask) {
-            m_mask->getRasterPositionData(m_nCells, &m_rasterPositionData);
+            m_mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
             m_storePositions = false;
         }
         if (m_calcPositions) {
