@@ -23,6 +23,7 @@
 /// include MongoDB, optional
 #ifdef USE_MONGODB
 #include "MongoUtil.h"
+
 #endif /* USE_MONGODB */
 /// include utility functions
 #include "utilities.h"
@@ -84,6 +85,36 @@ using namespace std;
 
 typedef pair<int, int> RowCol;
 typedef pair<double, double> XYCoor;
+
+/** Common functions independent to clsRasterData **/
+inline void print_status(string status_str) {
+#ifndef UNITTEST
+    cout << status_str << endl;
+#endif
+}
+/*!
+ * \brief check the existence of given raster file
+ */
+inline bool _check_raster_files_exist(const string &filename) {
+    if (!FileExists(filename)) {
+        print_status("The raster file " + filename + " does not exist or has not read permission.");
+        return false;
+    }
+    return true;
+}
+/*!
+ * \brief check the existence of given vector of raster files
+ * \return True if all existed, else false
+ */
+inline bool _check_raster_files_exist(vector<string> &filenames) {
+    for (auto it = filenames.begin(); it != filenames.end(); it++) {
+        if (!_check_raster_files_exist(*it)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /*!
  * \class clsRasterData
  * \ingroup data
@@ -111,9 +142,27 @@ public:
      * \param[in] defalutValue Default value when mask data exceeds the raster extend.
      *
      */
-    explicit clsRasterData(const string &filename, bool calcPositions = true,
+    explicit clsRasterData(const string &filename,
+                           bool calcPositions = true,
                            clsRasterData<MaskT> *mask = nullptr,
-                           bool useMaskExtent = true, T defalutValue = (T) NODATA_VALUE);
+                           bool useMaskExtent = true,
+                           T defalutValue = (T) NODATA_VALUE);
+    /*!
+     * \brief Validation check before the constructor of clsRasterData,
+     *        i.e., the raster file is existed and supported.
+     *        This is the recommended way to construct an instance of clsRasterData.
+     * \usage
+     *       clsRasterData<T, MaskT> *rs = clsRasterData<T, MaskT>::Init(filename)
+     *       if (nullptr == rs) {
+     *           throw exception("clsRasterData initialization failed!");
+     *           // or other error handling code.
+     *       }
+     */
+    static clsRasterData<T, MaskT> *Init(const string &filename,
+                                         bool calcPositions = true,
+                                         clsRasterData<MaskT> *mask = nullptr,
+                                         bool useMaskExtent = true,
+                                         T defalutValue = (T) NODATA_VALUE);
 
     /*!
      * \brief Constructor of clsRasterData instance from TIFF, ASCII, or other GDAL supported raster file
@@ -124,10 +173,20 @@ public:
      * \param[in] mask \a clsRasterData<MaskT> Mask layer
      * \param[in] useMaskExtent Use mask layer extent, even NoDATA exists.
      */
-    explicit clsRasterData(vector<string> filenames, bool calcPositions = true,
+    explicit clsRasterData(vector<string> &filenames,
+                           bool calcPositions = true,
                            clsRasterData<MaskT> *mask = nullptr,
-                           bool useMaskExtent = true, T defalutValue = (T) NODATA_VALUE);
-
+                           bool useMaskExtent = true,
+                           T defalutValue = (T) NODATA_VALUE);
+    /*!
+     * \brief Validation check before the constructor of clsRasterData,
+     *        i.e., the raster files are all existed and supported.
+     */
+    static clsRasterData<T, MaskT> *Init(vector<string> &filenames,
+                                         bool calcPositions = true,
+                                         clsRasterData<MaskT> *mask = nullptr,
+                                         bool useMaskExtent = true,
+                                         T defalutValue = (T) NODATA_VALUE);
     /*!
      * \brief Constructor an clsRasterData instance by 1D array data and mask
      */
@@ -248,7 +307,6 @@ public:
 
     //! Set new core file name
     void setCoreName(string name) { m_coreFileName = name; }
-
 
     /*!
      * \brief Set value to the given position and layer
@@ -511,7 +569,7 @@ public:
             (m_is2DRaster && nullptr != m_raster2DData)) { // Valid 2D raster
             return true;
         } else {
-            cout << "Please initialize the raster object first." << endl;
+            print_status("Please initialize the raster object first.");
             return false;
         }
     }
@@ -521,10 +579,10 @@ public:
      */
     inline bool validate_row_col(int row, int col) {
         if ((row < 0 || row >= this->getRows()) || (col < 0 || col >= this->getCols())) {
-            cout << "The row must between 0 and " << this->getRows() - 1;
-            cout << ", and the col must between 0 and " << this->getCols() - 1 << endl;
+            print_status("The row must between 0 and " + ValueToString(this->getRows() - 1) +
+                ", and the col must between 0 and " + ValueToString(this->getCols() - 1));
             return false;
-        } else return true;
+        } else { return true; }
     }
 
     /*!
@@ -532,11 +590,10 @@ public:
      */
     inline bool validate_layer(int lyr) {
         if (lyr <= 0 || lyr > m_nLyrs) {
-            cout << "The layer must be 1 ";
-            if (m_nLyrs > 1) cout << " or between 1 and " << m_nLyrs;
-            cout << endl;
+            print_status("The layer must be 1 ");
+            if (m_nLyrs > 1) print_status(" or between 1 and " + ValueToString(m_nLyrs));
             return false;
-        } else return true;
+        } else { return true; }
     }
 
     /*!
@@ -544,9 +601,9 @@ public:
      */
     inline bool validate_index(int idx) {
         if (idx < 0 || idx >= m_nCells) {
-            cout << "The index must between 0 and " << m_nCells - 1 << endl;
+            print_status("The index must between 0 and "+ValueToString(m_nCells - 1));
             return false;
-        } else return true;
+        } else { return true; }
     }
 
     //! Get full filename
@@ -608,18 +665,6 @@ private:
      */
     void _initialize_read_function(string filename, bool calcPositions = true, clsRasterData<MaskT> *mask = nullptr,
                                    bool useMaskExtent = true, T defalutValue = (T) NODATA_VALUE);
-
-    /*!
-     * \brief check the existence of given raster file
-     * \return True if existed, else false
-     */
-    bool _check_raster_file_exists(string filename);
-
-    /*!
-     * \brief check the existence of given vector of raster files
-     * \return True if all existed, else false
-     */
-    bool _check_raster_file_exists(vector<string> &filenames);
 
     /*!
      * \brief Constructor of clsRasterData instance from single file of TIFF, ASCII, or other GDAL supported raster file
@@ -750,9 +795,9 @@ private:
     map<string, double *> m_statsMap2D;
     ///< mask clsRasterData instance
     clsRasterData<MaskT> *m_mask;
-    //! initial once
+    ///< initial once
     bool m_initialized;
-    //! Flag to identify 1D or 2D raster
+    ///< Flag to identify 1D or 2D raster
     bool m_is2DRaster;
     ///< calculate valid positions or not. The default is true.
     bool m_calcPositions;
@@ -760,7 +805,7 @@ private:
     bool m_storePositions;
     ///< To be consistent with other datesets, keep the extent of Mask layer, even include NoDATA.
     bool m_useMaskExtent;
-    //! Statistics calculated?
+    ///< Statistics calculated?
     bool m_statisticsCalculated;
 };
 
@@ -827,30 +872,35 @@ clsRasterData<T, MaskT>::clsRasterData(const string &filename, bool calcPosition
                                        clsRasterData<MaskT> *mask /* = nullptr */,
                                        bool useMaskExtent /* = true */,
                                        T defalutValue /* = (T) NODATA_VALUE */) {
-    if (!this->ReadFromFile(filename, calcPositions, mask, useMaskExtent, defalutValue)) {
-        cout << "Please make sure the file path existed!" << endl;
-        return;
-    }
+    this->ReadFromFile(filename, calcPositions, mask, useMaskExtent, defalutValue);
 }
 
 template<typename T, typename MaskT>
-clsRasterData<T, MaskT>::clsRasterData(vector<string> filenames, bool calcPositions /* = true */,
+clsRasterData<T, MaskT> *clsRasterData<T, MaskT>::Init(const string &filename,
+                                                       bool calcPositions /* = true */,
+                                                       clsRasterData<MaskT> *mask /* = nullptr */,
+                                                       bool useMaskExtent /* = true */,
+                                                       T defalutValue /* = (T) NODATA_VALUE */) {
+    if (!_check_raster_files_exist(filename)) return nullptr;
+    return new clsRasterData<T, MaskT>(filename, calcPositions, mask, useMaskExtent, defalutValue);
+}
+
+template<typename T, typename MaskT>
+clsRasterData<T, MaskT>::clsRasterData(vector<string> &filenames,
+                                       bool calcPositions /* = true */,
                                        clsRasterData<MaskT> *mask /* = nullptr */,
                                        bool useMaskExtent /* = true */,
                                        T defalutValue /* = (T) NODATA_VALUE */) {
     this->_initialize_raster_class();
-    /// if filenames is empty
-    if (filenames.empty()) {
-        cout << "filenames must have at least one raster file path!" << endl;
+    if (filenames.empty()) { /// if filenames is empty
+        print_status("The filenames MUST have at least one raster file path!");
         return;
     }
-    /// if all filenames are presented
-    if (!this->_check_raster_file_exists(filenames)) {
-        cout << "Please make sure all file path existed!" << endl;
+    if (!_check_raster_files_exist(filenames)) {  /// if not all filenames are presented
+        print_status("Please make sure all file path existed!");
         return;
     }
-    /// if filenames has only one file
-    if (filenames.size() == 1) {
+    if (filenames.size() == 1) {  /// if filenames has only one file
         if (!this->_construct_from_single_file(filenames[0], calcPositions, mask,
                                                useMaskExtent, defalutValue)) {
             return;
@@ -909,6 +959,29 @@ clsRasterData<T, MaskT>::clsRasterData(vector<string> filenames, bool calcPositi
 }
 
 template<typename T, typename MaskT>
+clsRasterData<T, MaskT> *clsRasterData<T, MaskT>::Init(vector<string> &filenames,
+                                                       bool calcPositions /* = true */,
+                                                       clsRasterData<MaskT> *mask /* = nullptr */,
+                                                       bool useMaskExtent /* = true */,
+                                                       T defalutValue /* = (T) NODATA_VALUE */) {
+    if (filenames.empty()) { /// if filenames is empty
+        print_status("The filenames MUST have at least one raster file path!");
+        return nullptr;
+    }
+    if (!_check_raster_files_exist(filenames)) {  /// if not all filenames are presented
+        print_status("Please make sure all file path existed!");
+        return nullptr;
+    }
+    if (filenames.size() == 1) {  /// if filenames has only one file
+        return new clsRasterData<T, MaskT>(filenames[0], calcPositions, mask,
+                                           useMaskExtent, defalutValue);
+    } else {  /// construct from multi-layers file
+        return new clsRasterData<T, MaskT>(filenames, calcPositions, mask,
+                                           useMaskExtent, defalutValue);
+    }
+}
+
+template<typename T, typename MaskT>
 clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, T *&values) {
     this->_initialize_raster_class();
     m_mask = mask;
@@ -946,31 +1019,12 @@ clsRasterData<T, MaskT>::clsRasterData(MongoGridFS *gfs, const char *remoteFilen
 #endif /* USE_MONGODB */
 
 template<typename T, typename MaskT>
-bool clsRasterData<T, MaskT>::_check_raster_file_exists(string filename) {
-    if (!FileExists(filename)) {
-        cout << "The file " + filename + " does not exist or has not read permission." << endl;
-        return false;
-    }
-    return true;
-}
-
-template<typename T, typename MaskT>
-bool clsRasterData<T, MaskT>::_check_raster_file_exists(vector<string> &filenames) {
-    for (vector<string>::iterator it = filenames.begin(); it != filenames.end(); it++) {
-        if (!this->_check_raster_file_exists(*it)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-template<typename T, typename MaskT>
 bool clsRasterData<T, MaskT>::_construct_from_single_file(string filename, bool calcPositions /* = true */,
                                                           clsRasterData<MaskT> *mask /* = nullptr */,
                                                           bool useMaskExtent /* = true */,
                                                           T defalutValue /* = (T) NODATA_VALUE */) {
-    if (nullptr != mask) m_mask = mask;
-    else useMaskExtent = false;
+    if (nullptr != mask) { m_mask = mask; }
+    else { useMaskExtent = false; }
     m_filePathName = filename; // full path
     m_coreFileName = GetCoreFileName(m_filePathName);
     m_calcPositions = calcPositions;
@@ -988,7 +1042,7 @@ bool clsRasterData<T, MaskT>::_construct_from_single_file(string filename, bool 
         /******** Mask and calculate valid positions ********/
         this->_mask_and_calculate_valid_positions();
         return true;
-    }else return false;
+    } else { return false; }
 }
 
 template<typename T, typename MaskT>
@@ -1001,19 +1055,27 @@ clsRasterData<T, MaskT>::~clsRasterData() {
 }
 
 /************* Get information functions ***************/
-
 template<typename T, typename MaskT>
 void clsRasterData<T, MaskT>::calculateStatistics() {
     if (this->m_statisticsCalculated) return;
     if (m_is2DRaster && nullptr != m_raster2DData) {
         double **derivedvs;
         basicStatistics(m_raster2DData, m_nCells, m_nLyrs, &derivedvs, m_noDataValue);
-        m_statsMap2D.at(STATS_RS_VALIDNUM) = derivedvs[0];
-        m_statsMap2D.at(STATS_RS_MEAN) = derivedvs[1];
-        m_statsMap2D.at(STATS_RS_MAX) = derivedvs[2];
-        m_statsMap2D.at(STATS_RS_MIN) = derivedvs[3];
-        m_statsMap2D.at(STATS_RS_STD) = derivedvs[4];
-        m_statsMap2D.at(STATS_RS_RANGE) = derivedvs[5];
+        if (m_statsMap2D.empty()) {
+            m_statsMap2D.insert(map<string, double *>::value_type(STATS_RS_VALIDNUM, derivedvs[0]));
+            m_statsMap2D.insert(map<string, double *>::value_type(STATS_RS_MEAN, derivedvs[1]));
+            m_statsMap2D.insert(map<string, double *>::value_type(STATS_RS_MAX, derivedvs[2]));
+            m_statsMap2D.insert(map<string, double *>::value_type(STATS_RS_MIN, derivedvs[3]));
+            m_statsMap2D.insert(map<string, double *>::value_type(STATS_RS_STD, derivedvs[4]));
+            m_statsMap2D.insert(map<string, double *>::value_type(STATS_RS_RANGE, derivedvs[5]));
+        } else {
+            m_statsMap2D.at(STATS_RS_VALIDNUM) = derivedvs[0];
+            m_statsMap2D.at(STATS_RS_MEAN) = derivedvs[1];
+            m_statsMap2D.at(STATS_RS_MAX) = derivedvs[2];
+            m_statsMap2D.at(STATS_RS_MIN) = derivedvs[3];
+            m_statsMap2D.at(STATS_RS_STD) = derivedvs[4];
+            m_statsMap2D.at(STATS_RS_RANGE) = derivedvs[5];
+        }
         /// 1D array elements of derivedvs will be released by the destructor: releaseStatsMap2D()
         delete[] derivedvs;
         derivedvs = nullptr;
@@ -1052,7 +1114,7 @@ template<typename T, typename MaskT>
 double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr /* = 1 */) {
     sindex = GetUpper(sindex);
     if (!this->validate_raster_data() || !this->validate_layer(lyr)) {
-        cout << "No available raster statistics!" << endl;
+        print_status("No available raster statistics!");
         return m_noDataValue;
     }
     if (this->m_is2DRaster && nullptr != m_raster2DData)  // for 2D raster data
@@ -1064,7 +1126,7 @@ double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr /* = 1 */) 
             }
             return m_statsMap2D.at(sindex)[lyr - 1];
         } else {
-            cout << "WARNING: " + sindex + " is not supported currently." << endl;
+            print_status("WARNING: " + ValueToString(sindex) + " is not supported currently.");
             return m_noDataValue;
         }
     } else  // for 1D raster data
@@ -1076,7 +1138,7 @@ double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr /* = 1 */) 
             }
             return m_statsMap.at(sindex);
         } else {
-            cout << "WARNING: " + sindex + " is not supported currently." << endl;
+            print_status("WARNING: " + ValueToString(sindex) + " is not supported currently.");
             return m_noDataValue;
         }
     }
@@ -1085,7 +1147,7 @@ double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr /* = 1 */) 
 template<typename T, typename MaskT>
 void clsRasterData<T, MaskT>::getStatistics(string sindex, int *lyrnum, double **values) {
     if (!m_is2DRaster || nullptr != m_raster2DData) {
-        cout << "Please initialize the raster object first." << endl;
+        print_status("Please initialize the raster object first.");
         *values = nullptr;
         return;
     }
@@ -1098,7 +1160,7 @@ void clsRasterData<T, MaskT>::getStatistics(string sindex, int *lyrnum, double *
     }
     if (it == m_statsMap2D.end()) {
         *values = nullptr;
-        cout << "WARNING: " + sindex + " is not supported currently." << endl;
+        print_status("WARNING: " + ValueToString(sindex) + " is not supported currently.");
         return;
     }
     if (nullptr == it->second || !this->m_statisticsCalculated) {
@@ -1140,7 +1202,7 @@ int clsRasterData<T, MaskT>::getPosition(double x, double y) {
 
     if (FloatEqual(xllCenter, (double) NODATA_VALUE) || FloatEqual(yllCenter, (double) NODATA_VALUE) ||
         FloatEqual(dx, NODATA_VALUE) || nRows < 0 || nCols < 0) {
-        cout << "No available header information!" << endl;
+        print_status("No available header information!");
         return -2;
     }
 
@@ -1190,9 +1252,7 @@ bool clsRasterData<T, MaskT>::get2DRasterData(int *nCells, int *nLyrs, T ***data
 
 template<typename T, typename MaskT>
 void clsRasterData<T, MaskT>::getRasterPositionData(int *datalength, int ***positiondata) {
-    if (nullptr != m_mask && m_mask->PositionsCalculated() && m_useMaskExtent) {
-        m_mask->getRasterPositionData(datalength, positiondata);
-    } else if (m_calcPositions && nullptr != m_rasterPositionData) {
+    if (nullptr != m_rasterPositionData) {
         *datalength = m_nCells;
         *positiondata = m_rasterPositionData;
     } else {// reCalculate position data
@@ -1283,7 +1343,7 @@ void clsRasterData<T, MaskT>::getValue(int row, int col, int *nLyrs, T **values)
             }
             *values = cellValues;  // NODATA
             return;
-        } else return this->getValueByIndex(validCellIndex, nLyrs, values);
+        } else { return this->getValueByIndex(validCellIndex, nLyrs, values); }
     } else  // get data directly from row and col
     {
         if (m_is2DRaster) {
@@ -1305,12 +1365,12 @@ void clsRasterData<T, MaskT>::getValue(int row, int col, int *nLyrs, T **values)
 template<typename T, typename MaskT>
 void clsRasterData<T, MaskT>::setValue(int row, int col, T value, int lyr /* = 1 */) {
     if (!this->validate_raster_data() || !this->validate_row_col(row, col) || !this->validate_layer(lyr)) {
-        cout << "Set value failed!" << endl;
+        print_status("Set value failed!");
         return;
     }
     int idx = this->getPosition(row, col);
     if (idx == -1) {  // the origin value is NODATA
-        cout << "Current version do not support to setting value to NoDATA location!" << endl;
+        print_status("Current version do not support to setting value to NoDATA location!");
     } else {
         if (m_is2DRaster) {
             m_raster2DData[idx][lyr - 1] = value;
@@ -1359,12 +1419,8 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
     int count;
     int **position = nullptr;
     bool outputdirectly = true;
-    if (m_calcPositions && nullptr != m_rasterPositionData) {
+    if (m_calcPositions) {
         this->getRasterPositionData(&count, &position);
-        outputdirectly = false;
-        assert(nullptr != position);
-    } else if (m_useMaskExtent && nullptr != m_mask) {
-        m_mask->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
     }
@@ -1386,7 +1442,7 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
             // write data
             ofstream rasterFile(tmpfilename.c_str(), ios::app | ios::out);
             if (!rasterFile.is_open()) {
-                cout << "Error opening file: " << tmpfilename << endl;
+                print_status("Error opening file: " + tmpfilename);
                 return false;
             }
             int index = 0;
@@ -1409,7 +1465,7 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
     } else {  /// 3.2 1D raster data
         ofstream rasterFile(filename.c_str(), ios::app | ios::out);
         if (!rasterFile.is_open()) {
-            cout << "Error opening file: " << filename << endl;
+            print_status("Error opening file: " + filename);
             return false;
         }
         int index = 0;
@@ -1473,12 +1529,8 @@ bool clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
     int count;
     int **position = nullptr;
     bool outputdirectly = true;
-    if (nullptr != m_rasterPositionData) {
+    if (m_calcPositions) {
         this->getRasterPositionData(&count, &position);
-        outputdirectly = false;
-        assert(nullptr != position);
-    } else if (m_useMaskExtent && nullptr != m_mask) {
-        m_mask->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
     }
@@ -1489,6 +1541,7 @@ bool clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
     int nCols = int(m_headers.at(HEADER_RS_NCOLS));
     if (m_is2DRaster) {
         string prePath = GetPathFromFullName(filename);
+        if (StringMatch(prePath, "")) return false;
         string coreName = GetCoreFileName(filename);
         for (int lyr = 0; lyr < m_nLyrs; lyr++) {
             stringstream oss;
@@ -1649,7 +1702,7 @@ bool clsRasterData<T, MaskT>::ReadFromFile(string filename, bool calcPositions /
                                            clsRasterData<MaskT> *mask /* = nullptr */,
                                            bool useMaskExtent /* = true */,
                                            T defalutValue /* = (T) NODATA_VALUE */) {
-    if (!this->_check_raster_file_exists(filename)) return false;
+    if (!_check_raster_files_exist(filename)) return false;
     this->_initialize_raster_class();
     return this->_construct_from_single_file(filename, calcPositions, mask, useMaskExtent, defalutValue);
 }
@@ -1659,7 +1712,7 @@ bool clsRasterData<T, MaskT>::ReadASCFile(string filename, bool calcPositions /*
                                           clsRasterData<MaskT> *mask /* = nullptr */,
                                           bool useMaskExtent /* = true */,
                                           T defalutValue /* = (T) NODATA_VALUE */) {
-    if (!this->_check_raster_file_exists(filename)) return false;
+    if (!_check_raster_files_exist(filename)) return false;
     this->_initialize_read_function(filename, calcPositions, mask, useMaskExtent, defalutValue);
     this->_read_asc_file(m_filePathName, &m_headers, &m_rasterData);
     m_srs = "";
@@ -1716,11 +1769,11 @@ void clsRasterData<T, MaskT>::ReadFromMongoDB(MongoGridFS *gfs,
     /// check data length
     if (m_nCells != nRows * nCols) {
         if (nullptr == m_mask) {
-            cout << "When raster stored in MongoDB is not full-sized, mask data must be provided!" << endl;
+            print_status("When raster stored in MongoDB is not full-sized, mask data must be provided!");
         }
         int nValidMaskNumber = m_mask->getCellNumber();
         if (nValidMaskNumber != m_nCells) {
-            cout << "The cell number must the same between mask and the current raster data." << endl;
+            print_status("The cell number must the same between mask and the current raster data.");
         }
     } else { reBuildData = true; }
     /// read data directly
@@ -1801,10 +1854,9 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
     StatusMessage(("Read " + filename + "...").c_str());
     GDALDataset *poDataset = (GDALDataset *) GDALOpen(filename.c_str(), GA_ReadOnly);
     if (nullptr == poDataset) {
-        cout << "Open file " + filename + " failed." << endl;
+        print_status("Open file " + filename + " failed.");
         return false;
     }
-    //cout<<poDataset->GetRasterCount()<<endl;
     GDALRasterBand *poBand = poDataset->GetRasterBand(1);
     map<string, double> tmpheader;
     int nRows = poBand->GetYSize();
@@ -1847,7 +1899,6 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
             for (int j = 0; j < nCols; ++j) {
                 int index = i * nCols + j;
                 tmprasterdata[index] = (T) pData[index];
-                // cout<<i<<", "<<j<<": "<<pData[index]<<","<<tmprasterdata[index]<<endl;
             }
         }
         CPLFree(pData);
@@ -2063,16 +2114,16 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
                 tempFloat = m_rasterData[idx];
             }
             if (FloatEqual(double(tempFloat), double(m_noDataValue))) continue;
-            values.push_back(tempFloat);
+            values.emplace_back(tempFloat);
             if (m_is2DRaster && m_nLyrs > 1) {
                 vector<T> tmpv(m_nLyrs - 1);
                 for (int lyr = 1; lyr < m_nLyrs; lyr++) {
                     tmpv[lyr - 1] = m_raster2DData[idx][lyr];
                 }
-                values2D.push_back(tmpv);
+                values2D.emplace_back(tmpv);
             }
-            positionRows.push_back(i);
-            positionCols.push_back(j);
+            positionRows.emplace_back(i);
+            positionCols.emplace_back(j);
         }
     }
     /// swap vector to save memory
@@ -2096,7 +2147,8 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
     }
 
     /// m_rasterPositionData is nullptr till now.
-    m_rasterPositionData = new int *[m_nCells];
+    //m_rasterPositionData = new int *[m_nCells];
+    Initialize2DArray(m_nCells, 2, m_rasterPositionData, 0);
     m_storePositions = true;
     for (int i = 0; i < m_nCells; ++i) {
         if (m_is2DRaster) {
@@ -2109,7 +2161,7 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
         } else {
             m_rasterData[i] = values.at(i);
         }
-        m_rasterPositionData[i] = new int[2];
+        //m_rasterPositionData[i] = new int[2];
         m_rasterPositionData[i][0] = positionRows.at(i);
         m_rasterPositionData[i][1] = positionCols.at(i);
     }
@@ -2119,240 +2171,241 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
 template<typename T, typename MaskT>
 void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
     int oldcellnumber = m_nCells;
-    if (nullptr != m_mask) {
-        /// 1. Get new values and positions according to Mask's position data
-        /// initial vectors
-        vector<T> values;
-        vector<vector<T> > values2D; /// store layer 2~n data (excluding the first layerS)
-        vector<int> positionRows;
-        vector<int> positionCols;
-        int cols = (int) m_headers.at(HEADER_RS_NCOLS);
-        if (m_mask->PositionsCalculated()) {
-            /// Get the position data from mask
-            int nValidMaskNumber;
-            int **validPosition = nullptr;
-            m_mask->getRasterPositionData(&nValidMaskNumber, &validPosition);
-            /// Get the valid data according to coordinate
-            for (int i = 0; i < nValidMaskNumber; ++i) {
-                int tmpRow = validPosition[i][0];
-                int tmpCol = validPosition[i][1];
-                XYCoor tmpXY = m_mask->getCoordinateByRowCol(tmpRow, tmpCol);
-                /// get current raster value by XY
-                RowCol tmpPosition = this->getPositionByCoordinate(tmpXY.first, tmpXY.second);
-                if (tmpPosition.first == -1 || tmpPosition.second == -1) continue;
-
-                T tmpValue;
-                if (m_is2DRaster) {
-                    tmpValue = m_raster2DData[tmpPosition.first * cols + tmpPosition.second][0];
-                    if (m_nLyrs > 1) {
-                        vector<T> tmpValues(m_nLyrs - 1);
-                        for (int lyr = 1; lyr < m_nLyrs; lyr++) {
-                            tmpValues[lyr - 1] = m_raster2DData[tmpPosition.first * cols + tmpPosition.second][lyr];
-                            if (FloatEqual(tmpValues[lyr - 1], m_noDataValue)) {
-                                tmpValues[lyr - 1] = m_defaultValue;
-                            }
-                        }
-                        values2D.push_back(tmpValues);
-                    }
-                } else {
-                    tmpValue = m_rasterData[tmpPosition.first * cols + tmpPosition.second];
-                }
-                // cout<<tmpValue<<",";
-                if (FloatEqual(tmpValue, m_noDataValue)) {
-                    tmpValue = m_defaultValue;
-                }
-                values.push_back(tmpValue);
-                positionRows.push_back(tmpRow);
-                positionCols.push_back(tmpCol);
-            }
-        } else {
-            int maskRows = m_mask->getRows();
-            int maskCols = m_mask->getCols();
-            for (int i = 0; i < maskRows; ++i) {
-                for (int j = 0; j < maskCols; ++j) {
-                    /// check mask data
-                    if (FloatEqual(m_mask->getValue(i, j), m_mask->getNoDataValue())) continue;
-
-                    XYCoor tmpXY = m_mask->getCoordinateByRowCol(i, j);
-                    /// get current raster value by XY
-                    RowCol tmpPosition = this->getPositionByCoordinate(tmpXY.first, tmpXY.second);
-                    if (tmpPosition.first == -1 || tmpPosition.second == -1) continue;
-                    T tmpValue;
-                    if (m_is2DRaster) {
-                        tmpValue = m_raster2DData[tmpPosition.first * cols + tmpPosition.second][0];
-                        if (m_nLyrs > 1) {
-                            vector<T> tmpValues(m_nLyrs - 1);
-                            for (int lyr = 1; lyr < m_nLyrs; lyr++) {
-                                tmpValues[lyr - 1] = m_raster2DData[tmpPosition.first * cols + tmpPosition.second][lyr];
-                                if (FloatEqual(tmpValues[lyr - 1], m_noDataValue)) {
-                                    tmpValues[lyr - 1] = m_defaultValue;
-                                }
-                            }
-                            values2D.push_back(tmpValues);
-                        }
-                    } else {
-                        tmpValue = m_rasterData[tmpPosition.first * cols + tmpPosition.second];
-                    }
-                    if (FloatEqual(tmpValue, m_noDataValue)) {
-                        tmpValue = m_defaultValue;
-                    }
-                    positionRows.push_back(i);
-                    positionCols.push_back(j);
-                }
-            }
-        }
-        /// swap vector to save memory
-        if (m_is2DRaster && m_nLyrs > 1) {
-            vector<vector<T> >(values2D).swap(values2D);
-        }
-        vector<T>(values).swap(values);
-        vector<int>(positionRows).swap(positionRows);
-        vector<int>(positionCols).swap(positionCols);
-        //values.shrink_to_fit();
-        //positionRows.shrink_to_fit();
-        //positionCols.shrink_to_fit();
-        /// 2. Use the extent of Mask data or not.
-        /// overwrite header information by Mask's
-        this->copyHeader(m_mask->getRasterHeader());
-        /// avoid to assign the Mask's NODATA
-        m_headers.at(HEADER_RS_NODATA) = m_noDataValue;
-        m_srs = string(m_mask->getSRS());
-        /// 2.1 Is the valid grid extent same as the mask data?
-        bool sameExtentWithMask = true;
-        /// reCalculate headers
-        vector<int>::iterator maxRow = max_element(positionRows.begin(), positionRows.end());
-        vector<int>::iterator minRow = min_element(positionRows.begin(), positionRows.end());
-        vector<int>::iterator maxCol = max_element(positionCols.begin(), positionCols.end());
-        vector<int>::iterator minCol = min_element(positionCols.begin(), positionCols.end());
-        int max_row = *maxRow;
-        int min_row = *minRow;
-        int max_col = *maxCol;
-        int min_col = *minCol;
-        int newRows = max_row - min_row + 1;
-        int newCols = max_col - min_col + 1;
-        if (newRows != m_mask->getRows() || newCols != m_mask->getCols()) {
-            sameExtentWithMask = false;
-        }
-        /// 2.2 If do not use the extent of mask, the headers will be recalculated.
-        if (!m_useMaskExtent && !sameExtentWithMask) {
-            m_headers.at(HEADER_RS_NCOLS) = double(newCols);
-            m_headers.at(HEADER_RS_NROWS) = double(newRows);
-            m_headers.at(HEADER_RS_XLL) += min_col * m_headers.at(HEADER_RS_CELLSIZE);
-            m_headers.at(HEADER_RS_YLL) += (m_mask->getRows() - 1 - max_row) * m_headers.at(HEADER_RS_CELLSIZE);
-            /// clean redundant values (i.e., NODATA)
-            vector<int>::iterator rit = positionRows.begin();
-            vector<int>::iterator cit = positionCols.begin();
-            typename vector<T>::iterator vit = values.begin();
-            typename vector<vector<T> >::iterator
-                data2dit = values2D.begin();
-            for (typename vector<T>::iterator it = values.begin(); it != values.end();) {
-                int64_t idx = distance(vit, it);
-                int tmpr = positionRows.at(idx);
-                int tmpc = positionCols.at(idx);
-
-                if (tmpr > max_row || tmpr < min_row || tmpc > max_col || tmpc < min_col
-                    || FloatEqual((T) *it, m_noDataValue)) {
-                    it = values.erase(it);
-                    if (m_is2DRaster && m_nLyrs > 1) {
-                        values2D.erase(data2dit + idx);
-                        data2dit = values2D.begin();
-                    }
-                    positionCols.erase(cit + idx);
-                    positionRows.erase(rit + idx);
-                    /// reset the iterators
-                    rit = positionRows.begin();
-                    cit = positionCols.begin();
-                    vit = values.begin();
-                } else {
-                    /// get new column and row number
-                    positionRows[idx] -= min_row;
-                    positionCols[idx] -= min_col;
-                    ++it;
-                }
-            }
-            /// swap vector to save memory
-            vector<T>(values).swap(values);
-            if (m_is2DRaster && m_nLyrs > 1) {
-                vector<vector<T> >(values2D).swap(values2D);
-            }
-            vector<int>(positionRows).swap(positionRows);
-            vector<int>(positionCols).swap(positionCols);
-            // positionRows.shrink_to_fit();
-            // positionCols.shrink_to_fit();
-        }
-        /// 3. Create new raster data, considering valid data only or not.
-        m_storePositions = true;
-        if (nullptr != m_mask && m_mask->PositionsCalculated() && m_useMaskExtent && sameExtentWithMask) {
-            m_mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
-            m_storePositions = false;
-        }
-        if (m_calcPositions) {
-            m_nCells = (int) values.size();
-            m_headers.at(HEADER_RS_CELLSNUM) = m_nCells;
-            if (m_is2DRaster && nullptr != m_raster2DData) {
-                Release2DArray(oldcellnumber, m_raster2DData);
-                Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, m_noDataValue);
-            } else if (nullptr != m_rasterData) {
-                Release1DArray(m_rasterData);
-                Initialize1DArray(m_nCells, m_rasterData, m_noDataValue);
-            }
-            if (m_storePositions) m_rasterPositionData = new int *[m_nCells];
-            //SetDefaultOpenMPThread();
-#pragma omp parallel for
-            for (int i = 0; i < m_nCells; ++i) {
-                if (m_storePositions) {
-                    m_rasterPositionData[i] = new int[2];
-                    m_rasterPositionData[i][0] = positionRows.at(i);
-                    m_rasterPositionData[i][1] = positionCols.at(i);
-                }
-                if (m_is2DRaster) {
-                    m_raster2DData[i][0] = values.at(i);
-                    if (m_nLyrs > 1) {
-                        for (int lyr = 1; lyr < m_nLyrs; lyr++) {
-                            m_raster2DData[i][lyr] = values2D[i][lyr - 1];
-                        }
-                    }
-                } else {
-                    m_rasterData[i] = values.at(i);
-                }
-            }
-        } else { // reStore all cell values to m_rasterData, and the position data in case of later usage.
-            int ncols = (int) m_headers.at(HEADER_RS_NCOLS);
-            int nrows = (int) m_headers.at(HEADER_RS_NROWS);
-            m_nCells = ncols * nrows;
-            m_headers.at(HEADER_RS_CELLSNUM) = m_nCells;
-            if (nullptr != m_rasterData) Release1DArray(m_rasterData);
-            Initialize1DArray(m_nCells, m_rasterData, m_noDataValue);
-            if (m_is2DRaster && nullptr != m_raster2DData) {
-                Release2DArray(oldcellnumber, m_raster2DData);
-                Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, m_noDataValue);
-            } else if (nullptr != m_rasterData) {
-                Release1DArray(m_rasterData);
-                Initialize1DArray(m_nCells, m_rasterData, m_noDataValue);
-            }
-            //SetDefaultOpenMPThread();
-#pragma omp parallel for
-            for (int k = 0; k < positionRows.size(); ++k) {
-                int newIdx = positionRows.at(k) * ncols + positionCols.at(k);
-                if (m_is2DRaster) {
-                    m_raster2DData[newIdx][0] = values.at(k);
-                    if (m_nLyrs > 1) {
-                        for (int lyr = 1; lyr < m_nLyrs; lyr++) {
-                            m_raster2DData[newIdx][lyr] = values2D[k][lyr - 1];
-                        }
-                    }
-                } else {
-                    m_rasterData[newIdx] = values.at(k);
-                }
-            }
-        }
-    } else { // No mask data is provided.
+    if (nullptr == m_mask) {
         if (m_calcPositions) {
             _calculate_valid_positions_from_grid_data();
         } else {
             m_nCells = this->getRows() * this->getCols();
             m_headers.at(HEADER_RS_CELLSNUM) = m_nCells;
             // do nothing
+        }
+        return;
+    }
+    /// Use mask data
+    /// 1. Get new values and positions according to Mask's position data
+    vector<T> values;  /// store layer 1 data
+    vector<vector<T> > values2D; /// store layer 2~n data (excluding the first layerS)
+    vector<int> positionRows;
+    vector<int> positionCols;
+    int cols = (int) m_headers.at(HEADER_RS_NCOLS);
+    int nValidMaskNumber;
+    int **validPosition = nullptr;
+    int maskRows = m_mask->getRows();
+    int maskCols = m_mask->getCols();
+    int maskCells = maskRows * maskCols;
+    if (m_mask->PositionsCalculated()) { /// Get the position data from mask
+        m_mask->getRasterPositionData(&nValidMaskNumber, &validPosition);
+    } else {  /// Calculate position data of mask raster
+        nValidMaskNumber = 0;
+        Initialize2DArray(maskCells, 2, validPosition, -1);
+        for (int i = 0; i < maskRows; ++i) {
+            for (int j = 0; j < maskCols; ++j) { /// check mask nodata
+                if (FloatEqual(m_mask->getValue(i, j), m_mask->getNoDataValue())) { continue; }
+                else {
+                    validPosition[nValidMaskNumber][0] = i;
+                    validPosition[nValidMaskNumber][1] = j;
+                    nValidMaskNumber++;
+                }
+            }
+        }
+    }
+
+    /// calculate the interect extent between mask and the raster data
+    int max_row = -1;
+    int min_row = maskRows;
+    int max_col = -1;
+    int min_col = maskRows;
+    /// Get the valid data according to coordinate
+    for (int i = 0; i < nValidMaskNumber; ++i) {
+        int tmpRow = validPosition[i][0];
+        int tmpCol = validPosition[i][1];
+        XYCoor tmpXY = m_mask->getCoordinateByRowCol(tmpRow, tmpCol);
+        /// get current raster value by XY
+        RowCol tmpPosition = this->getPositionByCoordinate(tmpXY.first, tmpXY.second);
+        T tmpValue;
+        /// If the raster data at mask location is nodata, set to m_defaultValue.
+        if (tmpPosition.first == -1 || tmpPosition.second == -1) {
+            tmpValue = m_defaultValue;
+            if (m_is2DRaster && m_nLyrs > 1) {
+                vector<T> tmpValues(m_nLyrs - 1);
+                for (int lyr = 1; lyr < m_nLyrs; lyr++) tmpValues[lyr - 1] = m_defaultValue;
+                values2D.emplace_back(tmpValues);
+            }
+            values.emplace_back(tmpValue);
+            positionRows.emplace_back(tmpRow);
+            positionCols.emplace_back(tmpCol);
+            continue;
+        }
+        if (m_is2DRaster) {
+            tmpValue = m_raster2DData[tmpPosition.first * cols + tmpPosition.second][0];
+            if (m_nLyrs > 1) {
+                vector<T> tmpValues(m_nLyrs - 1);
+                for (int lyr = 1; lyr < m_nLyrs; lyr++) {
+                    tmpValues[lyr - 1] = m_raster2DData[tmpPosition.first * cols + tmpPosition.second][lyr];
+                    if (FloatEqual(tmpValues[lyr - 1], m_noDataValue)) {
+                        tmpValues[lyr - 1] = m_defaultValue;
+                    }
+                }
+                values2D.emplace_back(tmpValues);
+            }
+        } else {
+            tmpValue = m_rasterData[tmpPosition.first * cols + tmpPosition.second];
+        }
+        if (FloatEqual(tmpValue, m_noDataValue)) {
+            tmpValue = m_defaultValue;
+        } else {  /// the intersect extents dependent on the valid raster values
+            if (max_row < tmpRow) max_row = tmpRow;
+            if (min_row > tmpRow) min_row = tmpRow;
+            if (max_col < tmpCol) max_col = tmpCol;
+            if (min_col > tmpCol) min_col = tmpCol;
+        }
+        values.emplace_back(tmpValue);
+        positionRows.emplace_back(tmpRow);
+        positionCols.emplace_back(tmpCol);
+    }
+    /// swap vector to save memory
+    vector<T>(values).swap(values);
+    if (m_is2DRaster && m_nLyrs > 1) {
+        vector<vector<T> >(values2D).swap(values2D);
+        for (typename vector<vector<T> >::iterator iter = values2D.begin();
+             iter != values2D.end(); iter++) {
+            vector<T>(*iter).swap(*iter);
+            assert((*iter).size() == values.size());
+        }
+    }
+    vector<int>(positionRows).swap(positionRows);
+    vector<int>(positionCols).swap(positionCols);
+    //values.shrink_to_fit();
+    //positionRows.shrink_to_fit();
+    //positionCols.shrink_to_fit();
+    assert(values.size() == positionRows.size());
+    assert(values.size() == positionCols.size());
+
+    if (!m_mask->PositionsCalculated()) Release2DArray(maskCells, validPosition);
+
+    /// 2. Handing the header information
+    /// Is the valid grid extent same as the mask data?
+    bool sameExtentWithMask = true;
+//    vector<int>::iterator maxRow = max_element(positionRows.begin(), positionRows.end());
+//    vector<int>::iterator minRow = min_element(positionRows.begin(), positionRows.end());
+//    vector<int>::iterator maxCol = max_element(positionCols.begin(), positionCols.end());
+//    vector<int>::iterator minCol = min_element(positionCols.begin(), positionCols.end());
+//    int max_row = *maxRow;
+//    int min_row = *minRow;
+//    int max_col = *maxCol;
+//    int min_col = *minCol;
+    int newRows = max_row - min_row + 1;
+    int newCols = max_col - min_col + 1;
+    if (newRows != m_mask->getRows() || newCols != m_mask->getCols()) {
+        sameExtentWithMask = false;
+    }
+    /// 2.2a Copy header of mask data
+    this->copyHeader(m_mask->getRasterHeader());
+    /// 2.2b  ReCalculate the header based on the mask's header
+    if ((!m_useMaskExtent && !sameExtentWithMask) ||
+        ((m_useMaskExtent || sameExtentWithMask) && m_calcPositions && !m_mask->PositionsCalculated())) {
+        m_headers.at(HEADER_RS_NCOLS) = double(newCols);
+        m_headers.at(HEADER_RS_NROWS) = double(newRows);
+        m_headers.at(HEADER_RS_XLL) += min_col * m_mask->getCellWidth();
+        m_headers.at(HEADER_RS_YLL) += (m_mask->getRows() - 1 - max_row) * m_mask->getCellWidth();
+        m_headers.at(HEADER_RS_CELLSIZE) = m_mask->getCellWidth();
+        /// clean redundant values (i.e., NODATA)
+        vector<int>::iterator rit = positionRows.begin();
+        vector<int>::iterator cit = positionCols.begin();
+        typename vector<T>::iterator vit = values.begin();
+        typename vector<vector<T> >::iterator data2dit = values2D.begin();
+        for (typename vector<T>::iterator it = values.begin(); it != values.end();) {
+            int64_t idx = distance(vit, it);
+            int tmpr = positionRows.at(idx);
+            int tmpc = positionCols.at(idx);
+
+            if (tmpr > max_row || tmpr < min_row || tmpc > max_col || tmpc < min_col
+                || FloatEqual((T) *it, m_noDataValue)) {
+                it = values.erase(it);
+                if (m_is2DRaster && m_nLyrs > 1) {
+                    values2D.erase(data2dit + idx);
+                    data2dit = values2D.begin();
+                }
+                positionCols.erase(cit + idx);
+                positionRows.erase(rit + idx);
+                /// reset the iterators
+                rit = positionRows.begin();
+                cit = positionCols.begin();
+                vit = values.begin();
+            } else {
+                /// get new column and row number
+                positionRows[idx] -= min_row;
+                positionCols[idx] -= min_col;
+                ++it;
+            }
+        }
+        /// swap vector to save memory
+        vector<T>(values).swap(values);
+        if (m_is2DRaster && m_nLyrs > 1) {
+            vector<vector<T> >(values2D).swap(values2D);
+        }
+        vector<int>(positionRows).swap(positionRows);
+        vector<int>(positionCols).swap(positionCols);
+        // positionRows.shrink_to_fit();
+        // positionCols.shrink_to_fit();
+    }
+    /// 2.3 Handling NoData and SRS
+    m_headers.at(HEADER_RS_NODATA) = m_noDataValue;  /// avoid to assign the Mask's NODATA
+    m_srs = string(m_mask->getSRS());  /// use the coordinate system of mask data
+
+    /// 3. Create new raster data, and handling positions data
+    /// 3.1 Determine the m_nCells, and whether to allocate new position data space
+    bool store_fullsize_array = false;
+    if ((m_useMaskExtent || sameExtentWithMask) && m_calcPositions &&
+        m_mask->PositionsCalculated()) {  // assign position data pointer of mask data
+        m_mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
+        m_storePositions = false;
+    } else if ((!m_useMaskExtent && !sameExtentWithMask && !m_calcPositions) ||
+        ((m_useMaskExtent || sameExtentWithMask) && !m_calcPositions)) {
+        // reStore raster values as fullsize array
+        m_nCells = this->getCols() * this->getRows();
+        store_fullsize_array = true;
+        m_storePositions = false;
+    } else {  // reCalculate raster positions data and store
+        m_storePositions = true;
+        m_nCells = (int) values.size();
+    }
+    m_headers.at(HEADER_RS_CELLSNUM) = m_nCells;
+
+    /// 3.2 Release the original raster values, and create new
+    ///     raster array and positions data array (if necessary)
+    assert(this->validate_raster_data());
+    if (m_is2DRaster && nullptr != m_raster2DData) {  // multiple layers
+        Release2DArray(oldcellnumber, m_raster2DData);
+        Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, m_noDataValue);
+    } else {  // single layer
+        Release1DArray(m_rasterData);
+        Initialize1DArray(m_nCells, m_rasterData, m_noDataValue);
+    }
+    if (m_storePositions) Initialize2DArray(m_nCells, 2, m_rasterPositionData, 0);
+
+    /// 3.3 Loop the masked raster values
+    int ncols = (int) m_headers.at(HEADER_RS_NCOLS);
+    int synthesisIdx = -1;
+    for (size_t k = 0; k < positionRows.size(); ++k) {
+        if (store_fullsize_array) {
+            synthesisIdx = positionRows.at(k) * ncols + positionCols.at(k);
+        } else if (m_storePositions && !FloatEqual(values.at(k), m_noDataValue)) {
+            synthesisIdx++;
+            m_rasterPositionData[synthesisIdx][0] = positionRows.at(k);
+            m_rasterPositionData[synthesisIdx][1] = positionCols.at(k);
+        } else {
+            synthesisIdx++;
+        }
+        if (m_is2DRaster) {  // multiple layers
+            m_raster2DData[synthesisIdx][0] = values.at(k);
+            if (m_nLyrs > 1) {
+                for (int lyr = 1; lyr < m_nLyrs; lyr++) {
+                    m_raster2DData[synthesisIdx][lyr] = values2D[k][lyr - 1];
+                }
+            }
+        } else {  // single layer
+            m_rasterData[synthesisIdx] = values.at(k);
         }
     }
 }
