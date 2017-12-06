@@ -137,6 +137,7 @@ endif()
 
 ### unittest based on gtest/gmock, which is optional.
 IF (UNITTEST STREQUAL 1)
+    add_definitions(-DUNITTEST)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR})
     ### Download and compile googletest
     include(DownloadProject)
