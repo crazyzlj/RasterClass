@@ -21,6 +21,9 @@
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
+#ifdef SUPPORT_OMP
+    SetDefaultOpenMPThread();
+#endif
     GDALAllRegister();  // Register GDAL drivers, REQUIRED!
     // Create new directory for outputs if not exists.
     string apppath = GetAppPath();

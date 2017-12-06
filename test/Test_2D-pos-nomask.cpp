@@ -1,7 +1,12 @@
 /*!
- * @brief Test clsRasterData to handle multiple layer data with all default parameters.
- *        i.e., Read multiple raster layer from files, calculate positions of valid cells,
- *              and no mask layer.
+ * @brief Test description:
+ *                      CalcPositions UseMaskExtent ExtentConsistent  SingleLayer
+ *        Raster data:      YES            --            --               NO
+ *        Mask data  :      --             --            --               --
+ *
+ *        TEST CASE NAME (or TEST SUITE): 
+ *            clsRasterDataTestMultiPosNoMask
+ *
  *        Since the core code is irrelevant with the format of raster data, we take tiff
  *        as example here.
  * @version 1.0
@@ -15,14 +20,17 @@
 
 namespace {
 
-TEST(clsRasterDataTest2DDefault, RasterIO) {
+TEST(clsRasterDataTestMultiPosNoMask, RasterIO) {
     /// 0. Read multiple raster data.
     string apppath = GetAppPath();
     vector<string> filenames;
     filenames.push_back(apppath + "../data/dem_1.tif");
     filenames.push_back(apppath + "../data/dem_2.tif");
     filenames.push_back(apppath + "../data/dem_3.tif");
-    clsRasterData<float>* rs = new clsRasterData<float>(filenames);
+    clsRasterData<float> *rs = clsRasterData<float>::Init(filenames);  // recommended way
+    //clsRasterData<float> *rs = new clsRasterData<float>(filenames);  // unsafe way
+
+    ASSERT_NE(nullptr, rs);
 
     /// 1. Test members after constructing.
     EXPECT_EQ(545, rs->getDataLength());  // m_nCells
@@ -85,14 +93,27 @@ TEST(clsRasterDataTest2DDefault, RasterIO) {
 
     EXPECT_EQ(nullptr, rs->getMask());  // m_mask
 
+    /** Test getting position data **/
+    int ncells = -1;
+    int **positions = nullptr;
+    rs->getRasterPositionData(&ncells, &positions);  // m_rasterPositionData
+    EXPECT_EQ(545, ncells);
+    EXPECT_NE(nullptr, positions);
+    // index = 0, row = 0 and col = 1
+    EXPECT_EQ(0, positions[0][0]);
+    EXPECT_EQ(1, positions[0][1]);
+    // index = 544, row = 19 and col = 29
+    EXPECT_EQ(19, positions[544][0]);
+    EXPECT_EQ(29, positions[544][1]);
+
     /** Test getting raster data **/
-    int ncells = 0;
-    float* rs_data = nullptr;
+    ncells = 0;
+    float *rs_data = nullptr;
     EXPECT_FALSE(rs->getRasterData(&ncells, &rs_data));  // m_rasterData
     EXPECT_EQ(-1, ncells);
     EXPECT_EQ(nullptr, rs_data);
 
-    float** rs_2ddata = nullptr;
+    float **rs_2ddata = nullptr;
     int nlyrs = -1;
     EXPECT_TRUE(rs->get2DRasterData(&ncells, &nlyrs, &rs_2ddata));  // m_raster2DData
     EXPECT_EQ(545, ncells);
@@ -176,29 +197,46 @@ TEST(clsRasterDataTest2DDefault, RasterIO) {
     /** Set value **/
     // Set core file name
     string corename = rs->getCoreName();
-    string newcorename = corename + "_new_2Ddefault";
+    string newcorename = corename + "_2D-pos-nomask";
     rs->setCoreName(newcorename);
     EXPECT_EQ(newcorename, rs->getCoreName());
 
     // Set raster data value
-    rs->setValue(2, 4, 18.06f);
-    EXPECT_FLOAT_EQ(18.06f, rs->getValue(2, 4));
-    rs->setValue(2, 4, 28.06f, 2);
-    EXPECT_FLOAT_EQ(28.06f, rs->getValue(2, 4, 2));
-    rs->setValue(2, 4, 38.06f, 3);
-    EXPECT_FLOAT_EQ(38.06f, rs->getValue(2, 4, 3));
-    rs->setValue(2, 4, 28.06f, 4);
+    rs->setValue(2, 4, 0.806f);
+    EXPECT_FLOAT_EQ(0.806f, rs->getValue(2, 4));
+    rs->setValue(2, 4, 0.806f, 2);
+    EXPECT_FLOAT_EQ(0.806f, rs->getValue(2, 4, 2));
+    rs->setValue(2, 4, 0.806f, 3);
+    EXPECT_FLOAT_EQ(0.806f, rs->getValue(2, 4, 3));
+    rs->setValue(2, 4, 0.806f, 4);
     EXPECT_FLOAT_EQ(-9999.f, rs->getValue(2, 4, 4));
     rs->setValue(0, 0, 1.f);  // current version do not support setting value to NODATA location
     EXPECT_NE(1.f, rs->getValue(0, 0));
     EXPECT_FLOAT_EQ(-9999.f, rs->getValue(0, 0));
 
+    // update statistics
+    rs->updateStatistics();  // Should be manually invoked in your project!
+    // layer 1
+    EXPECT_FLOAT_EQ(0.806f, rs->getMinimum(1));
+    EXPECT_FLOAT_EQ(8.68065321f, rs->getAverage(1));
+    EXPECT_FLOAT_EQ(0.93353500f, rs->getSTD(1));
+    EXPECT_FLOAT_EQ(9.194f, rs->getRange(1));
+    // layer 2
+    EXPECT_FLOAT_EQ(0.806f, rs->getMinimum(2));
+    EXPECT_FLOAT_EQ(9.19171165f, rs->getAverage(2));
+    EXPECT_FLOAT_EQ(5.62426552f, rs->getSTD(2));
+    EXPECT_FLOAT_EQ(97.684f, rs->getRange(2));
+    // layer 3
+    EXPECT_FLOAT_EQ(8.48936296f, rs->getAverage(3));
+    EXPECT_FLOAT_EQ(1.42141729f, rs->getSTD(3));
+
     /** Output to new file **/
     string oldfullname = rs->getFilePath();
-    string fakefullname = GetPathFromFullName(oldfullname) + "noExistDir" + SEP + "noOut.tif";
+    string fakefullname = GetPathFromFullName(oldfullname) + "noExistDir" + SEP +
+        "noOut" + "." + GetSuffix(oldfullname);
     EXPECT_FALSE(rs->outputToFile(fakefullname));
     string newfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
-                         newcorename + "." + GetSuffix(oldfullname);
+        newcorename + "." + GetSuffix(oldfullname);
     EXPECT_TRUE(rs->outputToFile(newfullname));
 }
 } /* namespace */

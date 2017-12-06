@@ -1,7 +1,12 @@
 /*!
- * @brief Test clsRasterData to handle single layer data with all default parameters.
- *        i.e., Read single raster layer from file, calculate positions of valid cells,
- *              and no mask layer.
+ *@brief Test description:
+ *                      CalcPositions UseMaskExtent ExtentConsistent  SingleLayer
+ *        Raster data:      YES            --            --               YES
+ *        Mask data  :      --             --            --               --
+ *
+ *        TEST CASE NAME (or TEST SUITE): 
+ *            clsRasterDataTestPosNoMask
+ *
  *        Since we mainly support ASC and GDAL(e.g., TIFF),
  *        value-parameterized tests of Google Test will be used.
  * @cite https://github.com/google/googletest/blob/master/googletest/samples/sample7_unittest.cc
@@ -31,12 +36,13 @@ const char *tif_file_chars = tif_file.c_str();
 //can refer to the test parameter by GetParam().  In this case, the test
 //parameter is file name (const char*) which we call in fixture's SetUp()
 //to create and store an instance of clsRasterData<float>*.
-class clsRasterDataTestDefault : public TestWithParam<const char *> {
+class clsRasterDataTestPosNoMask : public TestWithParam<const char *> {
 public:
-    clsRasterDataTestDefault() : rs(nullptr) {}
-    ~clsRasterDataTestDefault() override { delete rs; }
+    clsRasterDataTestPosNoMask() : rs(nullptr) {}
+    ~clsRasterDataTestPosNoMask() override { delete rs; }
     void SetUp() override {
-        rs = new clsRasterData<float>(GetParam());
+        rs = clsRasterData<float>::Init(GetParam());  // recommended way
+        //rs = new clsRasterData<float>(GetParam());  // unsafe way
         ASSERT_NE(nullptr, rs);
     }
     void TearDown() override {
@@ -49,7 +55,7 @@ protected:
 
 // Since each TEST_P will invoke SetUp() and TearDown()
 // once, we put all tests in once test case. by lj.
-TEST_P(clsRasterDataTestDefault, RasterIO) {
+TEST_P(clsRasterDataTestPosNoMask, RasterIO) {
     /// 1. Test members after constructing.
     EXPECT_EQ(541, rs->getDataLength());  // m_nCells
     EXPECT_EQ(541, rs->getCellNumber());  // m_nCells
@@ -96,7 +102,7 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
 
     /** Test getting position data **/
     int ncells = -1;
-    int** positions = nullptr;
+    int **positions = nullptr;
     rs->getRasterPositionData(&ncells, &positions);  // m_rasterPositionData
     EXPECT_EQ(541, ncells);
     EXPECT_NE(nullptr, positions);
@@ -118,7 +124,7 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
     EXPECT_FLOAT_EQ(7.21f, rs_data[540]);
     EXPECT_FLOAT_EQ(9.43f, rs_data[29]);
 
-    float** rs_2ddata = nullptr;
+    float **rs_2ddata = nullptr;
     int nlyrs = -1;
     EXPECT_FALSE(rs->get2DRasterData(&ncells, &nlyrs, &rs_2ddata));  // m_raster2DData
     EXPECT_EQ(-1, ncells);
@@ -175,7 +181,7 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
 
     /** Set value **/
     // Set core file name
-    string newcorename = corename + "_new_1Ddefault";
+    string newcorename = corename + "_1D-pos-nomask";
     rs->setCoreName(newcorename);
     EXPECT_EQ(newcorename, rs->getCoreName());
 
@@ -195,31 +201,18 @@ TEST_P(clsRasterDataTestDefault, RasterIO) {
 
     /** Output to new file **/
     string oldfullname = rs->getFilePath();
-    string fakefullname = GetPathFromFullName(oldfullname) + "noExistDir" + SEP + "noOut.tif";
+    string fakefullname = GetPathFromFullName(oldfullname) + "noExistDir" + SEP +
+        "noOut" + "." + GetSuffix(oldfullname);;
     //EXPECT_FALSE(rs->outputToFile(fakefullname));
     string newfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
-                         newcorename + "." + GetSuffix(oldfullname);
+        newcorename + "." + GetSuffix(oldfullname);
     EXPECT_TRUE(rs->outputToFile(newfullname));
     EXPECT_TRUE(FileExists(newfullname));
 }
-
-// In order to run value-parameterized tests, you need to instantiate them,
-// or bind them to a list of values which will be used as test parameters.
-// You can instantiate them in a different translation module, or even
-// instantiate them several times.
-//
-// Here, we instantiate our tests with a list of two PrimeTable object
-// factory functions:
-INSTANTIATE_TEST_CASE_P(SingleLayerWithDefaultParam, clsRasterDataTestDefault,
+INSTANTIATE_TEST_CASE_P(SingleLayer, clsRasterDataTestPosNoMask,
                         Values(asc_file_chars,
                                tif_file_chars));
 #else
-//Google Test may not support value-parameterized tests with some
-//compilers. If we use conditional compilation to compile out all
-//code referring to the gtest_main library, MSVC linker will not link
-//that library at all and consequently complain about missing entry
-//point defined in that library (fatal error LNK1561: entry point
-//must be defined). This dummy test keeps gtest_main linked in.
 TEST(DummyTest, ValueParameterizedTestsAreNotSupportedOnThisPlatform) {}
 
 #endif /* GTEST_HAS_PARAM_TEST */

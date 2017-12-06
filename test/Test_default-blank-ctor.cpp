@@ -13,7 +13,7 @@
 namespace {
 TEST(clsRasterDataTestBlankCtor, ValidateAccess) {
     /// 0. Create an clsRasterData instance with blank ctor
-    clsRasterData<float, int>* rs = new clsRasterData<float, int>();
+    clsRasterData<float, int> *rs = new clsRasterData<float, int>();
     /// 1. Test members after constructing.
     EXPECT_EQ(-1, rs->getDataLength());  // m_nCells
     EXPECT_EQ(-1, rs->getCellNumber());  // m_nCells
@@ -60,7 +60,7 @@ TEST(clsRasterDataTestBlankCtor, ValidateAccess) {
 
     /** Test getting position data **/
     int ncells = -1;
-    int** positions = nullptr;
+    int **positions = nullptr;
     rs->getRasterPositionData(&ncells, &positions);  // m_rasterPositionData
     EXPECT_EQ(-1, ncells);
     EXPECT_EQ(nullptr, positions);
@@ -71,7 +71,7 @@ TEST(clsRasterDataTestBlankCtor, ValidateAccess) {
     EXPECT_EQ(-1, ncells);
     EXPECT_EQ(nullptr, rs_data);
 
-    float** rs_2ddata = nullptr;
+    float **rs_2ddata = nullptr;
     int nlyrs = -1;
     EXPECT_FALSE(rs->get2DRasterData(&ncells, &nlyrs, &rs_2ddata));  // m_raster2DData
     EXPECT_EQ(-1, ncells);
