@@ -1902,7 +1902,10 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
         for (int i = 0; i < nRows; ++i) {
             for (int j = 0; j < nCols; ++j) {
                 int index = i * nCols + j;
-                tmprasterdata[index] = (T) pData[index];
+                if (-2147483647 >= pData[index]) {
+                    m_noDataValue = (T) NODATA_VALUE;
+                    tmprasterdata[index] = m_noDataValue;
+                } else tmprasterdata[index] = (T) pData[index];
             }
         }
         CPLFree(pData);
@@ -1912,20 +1915,23 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
         for (int i = 0; i < nRows; ++i) {
             for (int j = 0; j < nCols; ++j) {
                 int index = i * nCols + j;
-                tmprasterdata[index] = (T) pData[index];
+                if (-32767 >= pData[index]) {
+                    m_noDataValue = (T) NODATA_VALUE;
+                    tmprasterdata[index] = m_noDataValue;
+                } else tmprasterdata[index] = (T) pData[index];
             }
         }
         CPLFree(pData);
-    } else if (dataType == GDT_Byte) {
+    } else if (dataType == GDT_Byte) {  // 8-bit unsigned integer, -128 ~ 127,
         char *pData = (char *) CPLMalloc(sizeof(char) * nCols * nRows);
         poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, pData, nCols, nRows, GDT_Byte, 0, 0);
         for (int i = 0; i < nRows; ++i) {
             for (int j = 0; j < nCols; ++j) {
                 int index = i * nCols + j;
-                tmprasterdata[index] = (T) pData[index];
-                if ((T) pData[index] < 0) {  // value range of char is -128~127, char a=128 will be -128!
+                if (-128 >= pData[index]) {
+                    m_noDataValue = (T) NODATA_VALUE;
                     tmprasterdata[index] = m_noDataValue;
-                }
+                } else tmprasterdata[index] = (T) pData[index];
             }
         }
         CPLFree(pData);
