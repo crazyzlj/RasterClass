@@ -7,6 +7,8 @@
  *        TEST CASE NAME (or TEST SUITE): 
  *            clsRasterDataTestPosIncstMaskPosExt
  *
+ *        Copy constructor is also tested here.
+ *
  *        Since we mainly support ASC and GDAL(e.g., TIFF),
  *        value-parameterized tests of Google Test will be used.
  * @cite https://github.com/google/googletest/blob/master/googletest/samples/sample7_unittest.cc
@@ -99,6 +101,10 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
     EXPECT_NE(nullptr, rs->getRasterPositionDataPointer());  // m_rasterPositionData
 
     /** Get metadata, m_headers **/
+    map<string, double> header_info = rs->getRasterHeader();
+    EXPECT_FLOAT_EQ(header_info.at("LAYERS"), rs->getLayers());
+    EXPECT_FLOAT_EQ(header_info.at("CELLSNUM"), rs->getCellNumber());
+
     EXPECT_EQ(9, rs->getRows());
     EXPECT_EQ(10, rs->getCols());
     EXPECT_FLOAT_EQ(19.f, rs->getXllCenter());
@@ -217,6 +223,21 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
         newcorename + "." + GetSuffix(oldfullname);
     EXPECT_TRUE(rs->outputToFile(newfullname));
     EXPECT_TRUE(FileExists(newfullname));
+
+    /** Copy constructor **/
+    clsRasterData<float, int>* copyrs = new clsRasterData<float, int>(rs);
+
+    clsRasterData<float, int> copyrs2(rs);
+
+    clsRasterData<float, int> copyrs3;
+    copyrs3.Copy(rs);
+
+    // Selected tests
+    EXPECT_EQ(73, copyrs->getCellNumber());  // m_nCells
+    EXPECT_EQ(1, copyrs->getLayers());
+    EXPECT_EQ(60, copyrs->getValidNumber());
+    EXPECT_FLOAT_EQ(10.10611667f, copyrs->getAverage());
+    delete copyrs;
 }
 
 INSTANTIATE_TEST_CASE_P(SingleLayer, clsRasterDataTestPosIncstMaskPosExt,
