@@ -134,7 +134,6 @@ public:
 
     /*!
      * \brief Constructor of clsRasterData instance from TIFF, ASCII, or other GDAL supported raster file
-     * \sa ReadASCFile() ReadFromGDAL()
      * \param[in] filename Full path of the raster file
      * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
      * \param[in] mask \a clsRasterData<MaskT> Mask layer
@@ -167,7 +166,7 @@ public:
     /*!
      * \brief Constructor of clsRasterData instance from TIFF, ASCII, or other GDAL supported raster file
      * Support 1D and/or 2D raster data
-     * \sa ReadASCFile() ReadFromGDAL()
+     * \sa ReadASCFile() ReadByGDAL()
      * \param[in] filenames Full paths vector of the 2D raster data
      * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
      * \param[in] mask \a clsRasterData<MaskT> Mask layer
@@ -188,12 +187,12 @@ public:
                                          bool useMaskExtent = true,
                                          T defalutValue = (T) NODATA_VALUE);
     /*!
-     * \brief Constructor an clsRasterData instance by 1D array data and mask
+     * \brief Construct an clsRasterData instance by 1D array data and mask
      */
     clsRasterData(clsRasterData<MaskT> *mask, T *&values);
 
     /*!
-     * \brief Constructor an clsRasterData instance by 2D array data and mask
+     * \brief Construct an clsRasterData instance by 2D array data and mask
      */
     clsRasterData(clsRasterData<MaskT> *mask, T **&values, int lyrs);
 
@@ -213,16 +212,19 @@ public:
                   T defalutValue = (T) NODATA_VALUE);
 #endif
     /*!
-    * \brief Copy constructor
-    *        `clsRasterData newraster(baseraster);` will equal to
-    *        `clsRasterData newraster;
-    *         newraster.Copy(baseraster);`
-    */
-    inline clsRasterData(const clsRasterData<T, MaskT> &another) {
-        this->_initialize_raster_class();
-        this->Copy(another);
-    }
-    //! Destructor, release \a m_rasterPositionData, \a m_rasterData and \a m_mask if existed.
+     * \brief Copy constructor
+     * \usage
+     *         Method 1: clsRasterData<T> newraster(baseraster);
+     *
+     *         Method 2: clsRasterData<T> newraster;
+     *                   newraster.Copy(baseraster);
+     *
+     *         Method 3: clsRasterData<T>* newraster = new clsRasterData<T>(baseraster);
+     *                   delete newraster;
+     */
+    explicit clsRasterData(clsRasterData<T, MaskT> *another);
+
+    //! Destructor
     ~clsRasterData();
 
     /************* Read functions ***************/
@@ -235,26 +237,6 @@ public:
      */
     bool ReadFromFile(string filename, bool calcPositions = true, clsRasterData<MaskT> *mask = nullptr,
                       bool useMaskExtent = true, T defalutValue = (T) NODATA_VALUE);
-
-    /*!
-     * \brief Read raster data from ASC file, mask data is optional
-     * \param[in] filename \a string
-     * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
-     * \param[in] mask \a clsRasterData<MaskT>
-     * \param[in] useMaskExtent Use mask layer extent, even NoDATA exists.
-     */
-    bool ReadASCFile(string filename, bool calcPositions = true, clsRasterData<MaskT> *mask = nullptr,
-                     bool useMaskExtent = true, T defalutValue = (T) NODATA_VALUE);
-
-    /*!
-     * \brief Read raster data by GDAL, mask data is optional
-     * \param[in] filename \a string
-     * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
-     * \param[in] mask \a clsRasterData<MaskT>
-     * \param[in] useMaskExtent Use mask layer extent, even NoDATA exists.
-     */
-    void ReadByGDAL(string filename, bool calcPositions = true, clsRasterData<MaskT> *mask = nullptr,
-                    bool useMaskExtent = true, T defalutValue = (T) NODATA_VALUE);
 
 #ifdef USE_MONGODB
     /*!
@@ -447,7 +429,10 @@ public:
     //! Get Y coordinate of left lower corner of raster data
     double getYllCenter() const { return m_headers.at(HEADER_RS_YLL); }
 
-    int getLayers() const { return m_nLyrs; }
+    inline int getLayers() const {
+        assert(m_nLyrs == (int) m_headers.at(HEADER_RS_LAYERS));
+        return m_nLyrs;
+    }
 
     //! Get NoDATA value of raster data
     T getNoDataValue() const { return (T) m_headers.at(HEADER_RS_NODATA); }
@@ -483,6 +468,9 @@ public:
 
     //! Get raster statistics information
     const map<string, double> &getStatistics() const { return m_statsMap; }
+
+    //! Get raster statistics information of 2D raster
+    const map<string, double *> &getStatistics2D() const { return m_statsMap2D; };
 
     //! Get full path name
     string getFilePath() const { return m_filePathName; }
@@ -601,7 +589,7 @@ public:
      */
     inline bool validate_index(int idx) {
         if (idx < 0 || idx >= m_nCells) {
-            print_status("The index must between 0 and "+ValueToString(m_nCells - 1));
+            print_status("The index must between 0 and " + ValueToString(m_nCells - 1));
             return false;
         } else { return true; }
     }
@@ -615,7 +603,7 @@ public:
     /*!
      * \brief Copy clsRasterData object
      */
-    void Copy(const clsRasterData<T, MaskT> &orgraster);
+    void Copy(const clsRasterData<T, MaskT> *orgraster);
 
     /*!
      * \brief Replace NoData value by the given value
@@ -669,7 +657,6 @@ private:
     /*!
      * \brief Constructor of clsRasterData instance from single file of TIFF, ASCII, or other GDAL supported raster file
      * Support 1D and/or 2D raster data
-     * \sa ReadASCFile() ReadFromGDAL()
      * \param[in] filename Full path of the raster file
      * \param[in] calcPositions Calculate positions of valid cells excluding NODATA. The default is true.
      * \param[in] mask \a clsRasterData<T2> Mask layer
@@ -843,7 +830,7 @@ void clsRasterData<T, MaskT>::_initialize_raster_class() {
     for (int i = 0; i < 6; i++) {
         m_headers.insert(make_pair(RASTER_HEADERS[i], NODATA_VALUE));
     }
-    m_headers.insert(make_pair(HEADER_RS_LAYERS, 1.));
+    m_headers.insert(make_pair(HEADER_RS_LAYERS, -1.));
     m_headers.insert(make_pair(HEADER_RS_CELLSNUM, -1.));
     string statsnames[6] = {STATS_RS_VALIDNUM, STATS_RS_MIN, STATS_RS_MAX, STATS_RS_MEAN,
                             STATS_RS_STD, STATS_RS_RANGE};
@@ -961,6 +948,7 @@ clsRasterData<T, MaskT>::clsRasterData(vector<string> &filenames,
             Release1DArray(tmplyrdata);
         }
         m_is2DRaster = true;
+        m_headers.at(HEADER_RS_LAYERS) = m_nLyrs;  // repair layers count in headers
     }
 }
 
@@ -989,11 +977,15 @@ template<typename T, typename MaskT>
 clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, T *&values) {
     this->_initialize_raster_class();
     m_mask = mask;
+    m_nLyrs = mask->getLayers();
     m_nCells = m_mask->getCellNumber();
     Initialize1DArray(m_nCells, m_rasterData, values); // DO NOT ASSIGN ARRAY DIRECTLY, IN CASE OF MEMORY ERROR!
     this->copyHeader(m_mask->getRasterHeader());
     m_defaultValue = m_mask->getDefaultValue();
     m_calcPositions = false;
+    if (mask->PositionsCalculated()) {
+        mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
+    }
     m_useMaskExtent = true;
 }
 
@@ -1007,6 +999,9 @@ clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, T **&values, 
     Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, values); // DO NOT ASSIGN ARRAY DIRECTLY!
     m_defaultValue = m_mask->getDefaultValue();
     m_useMaskExtent = true;
+    if (mask->PositionsCalculated()) {
+        mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
+    }
     m_is2DRaster = true;
 }
 
@@ -1125,7 +1120,8 @@ double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr /* = 1 */) 
     {
         map<string, double *>::iterator it = m_statsMap2D.find(sindex);
         if (it != m_statsMap2D.end()) {
-            if (nullptr == it->second || !this->m_statisticsCalculated) {
+            if (nullptr == it->second || m_statisticsCalculated) {
+                m_statisticsCalculated = false;
                 this->calculateStatistics();
             }
             return m_statsMap2D.at(sindex)[lyr - 1];
@@ -1423,7 +1419,7 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
     int count;
     int **position = nullptr;
     bool outputdirectly = true;
-    if (m_calcPositions) {
+    if (nullptr != m_rasterPositionData) {
         this->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
@@ -1533,7 +1529,7 @@ bool clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
     int count;
     int **position = nullptr;
     bool outputdirectly = true;
-    if (m_calcPositions) {
+    if (nullptr != m_rasterPositionData) {
         this->getRasterPositionData(&count, &position);
         outputdirectly = false;
         assert(nullptr != position);
@@ -1710,29 +1706,6 @@ bool clsRasterData<T, MaskT>::ReadFromFile(string filename, bool calcPositions /
     return this->_construct_from_single_file(filename, calcPositions, mask, useMaskExtent, defalutValue);
 }
 
-template<typename T, typename MaskT>
-bool clsRasterData<T, MaskT>::ReadASCFile(string filename, bool calcPositions /* = true */,
-                                          clsRasterData<MaskT> *mask /* = nullptr */,
-                                          bool useMaskExtent /* = true */,
-                                          T defalutValue /* = (T) NODATA_VALUE */) {
-    if (!_check_raster_files_exist(filename)) return false;
-    this->_initialize_read_function(filename, calcPositions, mask, useMaskExtent, defalutValue);
-    this->_read_asc_file(m_filePathName, &m_headers, &m_rasterData);
-    m_srs = "";
-    this->_mask_and_calculate_valid_positions();
-    return true;
-}
-
-template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::ReadByGDAL(string filename, bool calcPositions /* = true */,
-                                         clsRasterData<MaskT> *mask /* = nullptr */,
-                                         bool useMaskExtent /* = true */,
-                                         T defalutValue /* = (T) NODATA_VALUE */) {
-    this->_initialize_read_function(filename, calcPositions, mask, useMaskExtent, defalutValue);
-    this->_read_raster_file_by_gdal(m_filePathName, &m_headers, &m_rasterData, &m_srs);
-    this->_mask_and_calculate_valid_positions();
-}
-
 #ifdef USE_MONGODB
 template<typename T, typename MaskT>
 void clsRasterData<T, MaskT>::ReadFromMongoDB(MongoGridFS *gfs,
@@ -1905,7 +1878,7 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
                 if (-2147483647 >= pData[index]) {
                     m_noDataValue = (T) NODATA_VALUE;
                     tmprasterdata[index] = m_noDataValue;
-                } else tmprasterdata[index] = (T) pData[index];
+                } else { tmprasterdata[index] = (T) pData[index]; }
             }
         }
         CPLFree(pData);
@@ -1918,7 +1891,7 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
                 if (-32767 >= pData[index]) {
                     m_noDataValue = (T) NODATA_VALUE;
                     tmprasterdata[index] = m_noDataValue;
-                } else tmprasterdata[index] = (T) pData[index];
+                } else { tmprasterdata[index] = (T) pData[index]; }
             }
         }
         CPLFree(pData);
@@ -1931,7 +1904,7 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
                 if (-128 >= pData[index]) {
                     m_noDataValue = (T) NODATA_VALUE;
                     tmprasterdata[index] = m_noDataValue;
-                } else tmprasterdata[index] = (T) pData[index];
+                } else { tmprasterdata[index] = (T) pData[index]; }
             }
         }
         CPLFree(pData);
@@ -1969,7 +1942,13 @@ void clsRasterData<T, MaskT>::_add_other_layer_raster_data(int row, int col, int
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::Copy(const clsRasterData<T, MaskT> &orgraster) {
+clsRasterData<T, MaskT>::clsRasterData(clsRasterData<T, MaskT> *another) {
+    this->_initialize_raster_class();
+    this->Copy(another);
+}
+
+template<typename T, typename MaskT>
+void clsRasterData<T, MaskT>::Copy(const clsRasterData<T, MaskT> *orgraster) {
     if (m_is2DRaster && nullptr != m_raster2DData && m_nCells > 0) {
         Release2DArray(m_nCells, m_raster2DData);
     }
@@ -1981,36 +1960,47 @@ void clsRasterData<T, MaskT>::Copy(const clsRasterData<T, MaskT> &orgraster) {
     }
     if (m_statisticsCalculated) {
         releaseStatsMap2D();
+        m_statisticsCalculated = false;
     }
-    _initialize_raster_class();
-    m_filePathName = orgraster.getFilePath();
-    m_coreFileName = orgraster.getCoreName();
-    m_nCells = orgraster.getCellNumber();
-    m_noDataValue = orgraster.getNoDataValue();
-    m_defaultValue = orgraster.getDefaultValue();
-    if (orgraster.is2DRaster()) {
+    this->_initialize_raster_class();
+    m_filePathName = orgraster->getFilePath();
+    m_coreFileName = orgraster->getCoreName();
+    m_nCells = orgraster->getCellNumber();
+    m_nLyrs = orgraster->getLayers();
+    m_noDataValue = orgraster->getNoDataValue();
+    m_defaultValue = orgraster->getDefaultValue();
+    if (orgraster->is2DRaster()) {
         m_is2DRaster = true;
-        m_nLyrs = orgraster.getLayers();
-        Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, orgraster.get2DRasterDataPointer());
+        Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, orgraster->get2DRasterDataPointer());
     } else {
         m_rasterData = nullptr;
-        Initialize1DArray(m_nCells, m_rasterData, orgraster.getRasterDataPointer());
+        Initialize1DArray(m_nCells, m_rasterData, orgraster->getRasterDataPointer());
     }
-    m_mask = orgraster.getMask();
-    m_calcPositions = orgraster.PositionsCalculated();
+    m_mask = orgraster->getMask();
+    m_calcPositions = orgraster->PositionsCalculated();
     if (m_calcPositions) {
         m_storePositions = true;
-        Initialize2DArray(m_nCells, 2, m_rasterPositionData, orgraster.getRasterPositionDataPointer());
+        Initialize2DArray(m_nCells, 2, m_rasterPositionData, orgraster->getRasterPositionDataPointer());
     }
-    m_useMaskExtent = orgraster.MaskExtented();
-    m_statisticsCalculated = orgraster.StatisticsCalculated();
+    m_useMaskExtent = orgraster->MaskExtented();
+    m_statisticsCalculated = orgraster->StatisticsCalculated();
     if (m_statisticsCalculated) {
-        map<string, double> stats = orgraster.getStatistics();
-        for (map<string, double>::iterator iter = stats.begin(); iter != stats.end(); iter++) {
-            m_statsMap[iter->first] = iter->second;
+        if (m_is2DRaster) {
+            if (!m_statsMap2D.empty()) releaseStatsMap2D();
+            map<string, double*> stats2D = orgraster->getStatistics2D();
+            for (auto iter = stats2D.begin(); iter != stats2D.end(); iter++) {
+                double* tmpstatvalues = nullptr;
+                Initialize1DArray(m_nLyrs, tmpstatvalues, iter->second);
+                m_statsMap2D.insert(make_pair(iter->first, tmpstatvalues));
+            }
+        } else {
+            map<string, double> stats = orgraster->getStatistics();
+            for (auto iter = stats.begin(); iter != stats.end(); iter++) {
+                m_statsMap[iter->first] = iter->second;
+            }
         }
     }
-    this->copyHeader(orgraster.getRasterHeader());
+    this->copyHeader(orgraster->getRasterHeader());
 }
 
 template<typename T, typename MaskT>
