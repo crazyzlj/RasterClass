@@ -7,7 +7,8 @@
  *        TEST CASE NAME (or TEST SUITE): 
  *            clsRasterDataTestPosIncstMaskPosExt
  *
- *        Copy constructor is also tested here.
+ *        P.S.1. Copy constructor is also tested here.
+ *        P.S.2. MongoDB I/O is also tested if mongo-c-driver configured.
  *
  *        Since we mainly support ASC and GDAL(e.g., TIFF),
  *        value-parameterized tests of Google Test will be used.
@@ -237,6 +238,22 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
     EXPECT_EQ(1, copyrs->getLayers());
     EXPECT_EQ(60, copyrs->getValidNumber());
     EXPECT_FLOAT_EQ(10.10611667f, copyrs->getAverage());
+
+#ifdef USE_MONGODB
+    /** MongoDB I/O test **/
+    MongoClient* conn = MongoClient::Init("127.0.0.1", 27017);
+    ASSERT_NE(nullptr, conn);
+    string gfsfilename = "dem1d_" + GetSuffix(oldfullname);
+    MongoGridFS* gfs = new MongoGridFS(conn->getGridFS("test", "spatial"));
+    gfs->removeFile(gfsfilename);
+    copyrs->outputToMongoDB(gfsfilename, gfs);
+    clsRasterData<float, int>* mongors = clsRasterData<float, int>::Init(gfs, gfsfilename.c_str(),true,maskrs,true);
+    // test mongors data
+    EXPECT_EQ(73, mongors->getCellNumber());  // m_nCells
+    EXPECT_EQ(1, mongors->getLayers());
+    EXPECT_EQ(60, mongors->getValidNumber());
+    EXPECT_FLOAT_EQ(10.10611667f, mongors->getAverage());
+#endif
     delete copyrs;
 }
 

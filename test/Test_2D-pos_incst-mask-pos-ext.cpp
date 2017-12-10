@@ -7,7 +7,8 @@
  *        TEST CASE NAME (or TEST SUITE): 
  *            clsRasterDataTestMultiPosIncstMaskPosExt
  *
- *        Copy constructor is also tested here.
+ *        P.S.1. Copy constructor is also tested here.
+ *        P.S.2. MongoDB I/O is also tested if mongo-c-driver configured.
  *
  *        Since we mainly support ASC and GDAL(e.g., TIFF),
  *        value-parameterized tests of Google Test will be used.
@@ -206,7 +207,22 @@ TEST_P(clsRasterDataTestMultiPosIncstMaskPosExt, RasterIO) {
     EXPECT_EQ(3, copyrs->getLayers());
     EXPECT_EQ(64, copyrs->getValidNumber(1));
     EXPECT_FLOAT_EQ(8.43900000f, copyrs->getAverage(3));
+#ifdef USE_MONGODB
+    /** MongoDB I/O test **/
+    MongoClient* conn = MongoClient::Init("127.0.0.1", 27017);
+    ASSERT_NE(nullptr, conn);
+    string gfsfilename = "dem2d_" + GetSuffix(oldfullname);
+    MongoGridFS* gfs = new MongoGridFS(conn->getGridFS("test", "spatial"));
+    gfs->removeFile(gfsfilename);
+    copyrs->outputToMongoDB(gfsfilename, gfs);
+
+#endif
     delete copyrs;
+
+#ifdef USE_MONGODB
+    /** MongoDB I/O test **/
+
+#endif
 }
 
 INSTANTIATE_TEST_CASE_P(MultipleLayers, clsRasterDataTestMultiPosIncstMaskPosExt,
