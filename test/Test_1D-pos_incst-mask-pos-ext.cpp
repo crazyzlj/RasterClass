@@ -124,7 +124,6 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
     EXPECT_FLOAT_EQ(91.42f, rs->getRange());
     EXPECT_TRUE(rs->StatisticsCalculated());
 
-
     EXPECT_NE(nullptr, rs->getMask());  // m_mask
 
     /** Test getting raster data **/
@@ -222,11 +221,13 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
     EXPECT_FALSE(rs->outputToFile(fakefullname));
     string newfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
         newcorename + "." + GetSuffix(oldfullname);
+    string newfullname4mongo = GetPathFromFullName(oldfullname) + "result" + SEP +
+        newcorename + "_mongo." + GetSuffix(oldfullname);
     EXPECT_TRUE(rs->outputToFile(newfullname));
     EXPECT_TRUE(FileExists(newfullname));
 
     /** Copy constructor **/
-    clsRasterData<float, int>* copyrs = new clsRasterData<float, int>(rs);
+    clsRasterData<float, int> *copyrs = new clsRasterData<float, int>(rs);
 
     clsRasterData<float, int> copyrs2(rs);
 
@@ -241,18 +242,21 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
 
 #ifdef USE_MONGODB
     /** MongoDB I/O test **/
-    MongoClient* conn = MongoClient::Init("127.0.0.1", 27017);
+    MongoClient *conn = MongoClient::Init("127.0.0.1", 27017);
     ASSERT_NE(nullptr, conn);
     string gfsfilename = "dem1d_" + GetSuffix(oldfullname);
-    MongoGridFS* gfs = new MongoGridFS(conn->getGridFS("test", "spatial"));
+    MongoGridFS *gfs = new MongoGridFS(conn->getGridFS("test", "spatial"));
     gfs->removeFile(gfsfilename);
     copyrs->outputToMongoDB(gfsfilename, gfs);
-    clsRasterData<float, int>* mongors = clsRasterData<float, int>::Init(gfs, gfsfilename.c_str(),true,maskrs,true);
+    clsRasterData<float, int> *mongors = clsRasterData<float, int>::Init(gfs, gfsfilename.c_str(), true, maskrs, true);
     // test mongors data
     EXPECT_EQ(73, mongors->getCellNumber());  // m_nCells
     EXPECT_EQ(1, mongors->getLayers());
     EXPECT_EQ(60, mongors->getValidNumber());
     EXPECT_FLOAT_EQ(10.10611667f, mongors->getAverage());
+    // output to asc/tif file for comparison
+    EXPECT_TRUE(rs->outputToFile(newfullname4mongo));
+    EXPECT_TRUE(FileExists(newfullname4mongo));
 #endif
     delete copyrs;
 }

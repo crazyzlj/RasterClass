@@ -198,6 +198,8 @@ TEST_P(clsRasterDataTestMultiPosIncstMaskPosExt, RasterIO) {
     EXPECT_FALSE(rs->outputToFile(fakefullname));
     string newfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
         newcorename + "." + GetSuffix(oldfullname);
+    string newfullname4mongo = GetPathFromFullName(oldfullname) + "result" + SEP +
+        newcorename + "_mongo." + GetSuffix(oldfullname);
     EXPECT_TRUE(rs->outputToFile(newfullname));
 
     /** Copy constructor **/
@@ -207,6 +209,7 @@ TEST_P(clsRasterDataTestMultiPosIncstMaskPosExt, RasterIO) {
     EXPECT_EQ(3, copyrs->getLayers());
     EXPECT_EQ(64, copyrs->getValidNumber(1));
     EXPECT_FLOAT_EQ(8.43900000f, copyrs->getAverage(3));
+
 #ifdef USE_MONGODB
     /** MongoDB I/O test **/
     MongoClient* conn = MongoClient::Init("127.0.0.1", 27017);
@@ -215,14 +218,16 @@ TEST_P(clsRasterDataTestMultiPosIncstMaskPosExt, RasterIO) {
     MongoGridFS* gfs = new MongoGridFS(conn->getGridFS("test", "spatial"));
     gfs->removeFile(gfsfilename);
     copyrs->outputToMongoDB(gfsfilename, gfs);
-
+    clsRasterData<float, int> *mongors = clsRasterData<float, int>::Init(gfs, gfsfilename.c_str(), true, maskrs, true);
+    // test mongors data
+    EXPECT_EQ(73, copyrs->getCellNumber());  // m_nCells
+    EXPECT_EQ(3, copyrs->getLayers());
+    EXPECT_EQ(64, copyrs->getValidNumber(1));
+    EXPECT_FLOAT_EQ(8.43900000f, copyrs->getAverage(3));
+    // output to asc/tif file for comparison
+    EXPECT_TRUE(rs->outputToFile(newfullname4mongo));
 #endif
     delete copyrs;
-
-#ifdef USE_MONGODB
-    /** MongoDB I/O test **/
-
-#endif
 }
 
 INSTANTIATE_TEST_CASE_P(MultipleLayers, clsRasterDataTestMultiPosIncstMaskPosExt,

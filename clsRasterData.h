@@ -1699,7 +1699,6 @@ void clsRasterData<T, MaskT>::outputToMongoDB(string filename, MongoGridFS *gfs)
             for (int i = 0; i < nRows; ++i) {
                 for (int j = 0; j < nCols; ++j) {
                     int index = i * nCols + j;
-
                     if (validnum < m_nCells && (position[validnum][0] == i && position[validnum][1] == j)) {
                         rasterdata1D[index] = m_rasterData[validnum];
                         validnum++;
@@ -1770,45 +1769,48 @@ bool clsRasterData<T, MaskT>::ReadFromMongoDB(MongoGridFS *gfs,
 
     int nRows = (int) m_headers.at(HEADER_RS_NROWS);
     int nCols = (int) m_headers.at(HEADER_RS_NCOLS);
+    m_nCells = nRows * nCols;
     m_noDataValue = (T) m_headers.at(HEADER_RS_NODATA);
     m_nLyrs = (int) m_headers.at(HEADER_RS_LAYERS);
-    if (m_headers.find(HEADER_RS_CELLSNUM) != m_headers.end()) {
-        m_nCells = (int) m_headers.at(HEADER_RS_CELLSNUM);
-    }
-    /// TODO (by LJ), currently data stored in MongoDB is always float. I can not find a elegant way to make it template.
-    if (m_nCells < 0) {
-        m_nCells = length / sizeof(float) / m_nLyrs;
-    }
 
+    /// TODO (by LJ), currently data stored in MongoDB is always float.
+    ///  I can not find an elegant way to make it templated.
+    assert(m_nCells == length / sizeof(float) / m_nLyrs);
+
+    int validcount = -1;
+    if (m_headers.find(HEADER_RS_CELLSNUM) != m_headers.end()) {
+        validcount = (int)m_headers.at(HEADER_RS_CELLSNUM);
+    }
     /// 3. Store data.
-    bool reBuildData = false;
-    /// check data length
-    if (m_nCells != nRows * nCols) {
-        if (nullptr == m_mask) {
-            print_status("When raster stored in MongoDB is not full-sized, mask data must be provided!");
-        }
-        int nValidMaskNumber = m_mask->getCellNumber();
-        if (nValidMaskNumber != m_nCells) {
-            print_status("The cell number must the same between mask and the current raster data.");
-        }
-    } else { reBuildData = true; }
+    /// check the valid values count and determine whether can read directly.
+    bool reBuildData = true;
+    if (validcount != m_nCells && m_calcPositions && m_useMaskExtent &&
+        nullptr != m_mask && validcount == m_mask->getCellNumber()) {
+        reBuildData = false;
+        m_storePositions = false;
+        m_mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
+    }
     /// read data directly
     if (m_nLyrs == 1) {
         float *tmpdata = (float *) buf;
         Initialize1DArray(m_nCells, m_rasterData, m_noDataValue);
 #pragma omp parallel for
         for (int i = 0; i < m_nCells; i++) {
-            m_rasterData[i] = (T) tmpdata[i];
+            int tmpidx = i;
+            if (!reBuildData) tmpidx = m_rasterPositionData[i][0] * this->getCols() + m_rasterPositionData[i][1];
+            m_rasterData[i] = (T) tmpdata[tmpidx];
         }
         Release1DArray(tmpdata);
         m_is2DRaster = false;
     } else {
         float *tmpdata = (float *) buf;
-        m_raster2DData = new T *[m_nCells];
+        Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, m_noDataValue);
+#pragma omp parallel for
         for (int i = 0; i < m_nCells; i++) {
-            m_raster2DData[i] = new T[m_nLyrs];
+            int tmpidx = i;
+            if (!reBuildData) tmpidx = m_rasterPositionData[i][0] * this->getCols() + m_rasterPositionData[i][1];
             for (int j = 0; j < m_nLyrs; j++) {
-                int idx = i * m_nLyrs + j;
+                int idx = tmpidx * m_nLyrs + j;
                 m_raster2DData[i][j] = (T) tmpdata[idx];
             }
         }
@@ -1817,10 +1819,9 @@ bool clsRasterData<T, MaskT>::ReadFromMongoDB(MongoGridFS *gfs,
     }
     buf = nullptr;
     this->_check_default_value();
-    if (reBuildData) {
+    if (reBuildData)
         this->_mask_and_calculate_valid_positions();
-        return true;
-    } else { return false; }
+    return true;
 }
 
 #endif /* USE_MONGODB */
