@@ -202,6 +202,8 @@ TEST_P(clsRasterDataTestMultiPosIncstMaskNoPosExt, RasterIO) {
         newcorename + "." + GetSuffix(oldfullname);
     string newfullname4mongo = GetPathFromFullName(oldfullname) + "result" + SEP +
         newcorename + "_mongo." + GetSuffix(oldfullname);
+    EXPECT_FALSE(rs->outputToFile(fakefullname));
+    EXPECT_TRUE(rs->outputToFile(newfullname));
 
 #ifdef USE_MONGODB
     /** MongoDB I/O test **/
@@ -222,8 +224,6 @@ TEST_P(clsRasterDataTestMultiPosIncstMaskNoPosExt, RasterIO) {
     EXPECT_TRUE(mongors->outputToFile(newfullname4mongo));
 #endif
 
-    EXPECT_FALSE(rs->outputToFile(fakefullname));
-    EXPECT_TRUE(rs->outputToFile(newfullname));
 
     /** Copy constructor **/
     clsRasterData<float, int> *copyrs = new clsRasterData<float, int>(rs);

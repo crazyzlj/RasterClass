@@ -727,7 +727,7 @@ private:
      * \param[in] filename \a string, output ASC file path
      * \param[in] header header information
      */
-    void _write_ASC_headers(string filename, map<string, double> &header);
+    bool _write_ASC_headers(string filename, map<string, double> &header);
 
     /*!
      * \brief Write single geotiff file
@@ -1423,6 +1423,7 @@ void clsRasterData<T, MaskT>::setValue(int row, int col, T value, int lyr /* = 1
 
 template<typename T, typename MaskT>
 bool clsRasterData<T, MaskT>::outputToFile(string filename) {
+    if (GetPathFromFullName(filename) == "") return false;
     if (!this->validate_raster_data()) return false;
     string filetype = GetUpper(GetSuffix(filename));
     if (StringMatch(filetype, ASCIIExtension)) {
@@ -1435,9 +1436,13 @@ bool clsRasterData<T, MaskT>::outputToFile(string filename) {
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::_write_ASC_headers(string filename, map<string, double> &header) {
+bool clsRasterData<T, MaskT>::_write_ASC_headers(string filename, map<string, double> &header) {
     DeleteExistedFile(filename);
     ofstream rasterFile(filename.c_str(), ios::app | ios::out);
+    if (!rasterFile.is_open()) {
+        print_status("Error opening file: " + filename);
+        return false;
+    }
     //write file
     int rows = int(header.at(HEADER_RS_NROWS));
     int cols = int(header.at(HEADER_RS_NCOLS));
@@ -1449,6 +1454,7 @@ void clsRasterData<T, MaskT>::_write_ASC_headers(string filename, map<string, do
     rasterFile << HEADER_RS_CELLSIZE << " " << (float) header.at(HEADER_RS_CELLSIZE) << endl;
     rasterFile << HEADER_RS_NODATA << " " << setprecision(6) << header.at(HEADER_RS_NODATA) << endl;
     rasterFile.close();
+    return true;
 }
 
 template<typename T, typename MaskT>
@@ -1463,7 +1469,9 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
         assert(nullptr != position);
     }
     /// 2. Write ASC raster headers first (for 1D raster data only)
-    if (!m_is2DRaster) this->_write_ASC_headers(filename, m_headers);
+    if (!m_is2DRaster) {
+        if (!this->_write_ASC_headers(filename, m_headers)) return false;
+    }
     /// 3. Begin to write raster data
     int rows = int(m_headers.at(HEADER_RS_NROWS));
     int cols = int(m_headers.at(HEADER_RS_NCOLS));
@@ -1476,7 +1484,7 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
             stringstream oss;
             oss << prePath << coreName << "_" << (lyr + 1) << "." << ASCIIExtension;
             string tmpfilename = oss.str();
-            this->_write_ASC_headers(tmpfilename, m_headers);
+            if (!this->_write_ASC_headers(tmpfilename, m_headers)) return false;
             // write data
             ofstream rasterFile(tmpfilename.c_str(), ios::app | ios::out);
             if (!rasterFile.is_open()) {
