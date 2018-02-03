@@ -253,6 +253,10 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
     EXPECT_EQ(1, mongors->getLayers());
     EXPECT_EQ(60, mongors->getValidNumber());
     EXPECT_FLOAT_EQ(10.10611667f, mongors->getAverage());
+    string newfullname2 = GetPathFromFullName(oldfullname) + "result" + SEP +
+                         newcorename + "_mongo." + GetSuffix(oldfullname);
+    EXPECT_TRUE(rs->outputToFile(newfullname2));
+    EXPECT_TRUE(FileExists(newfullname2));
 #endif
     delete copyrs;
 }
