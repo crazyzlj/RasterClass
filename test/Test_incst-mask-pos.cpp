@@ -40,13 +40,13 @@ const char *tif_file_chars = tif_file.c_str();
 class clsRasterDataTestIncstMaskPos : public TestWithParam<const char *> {
 public:
     clsRasterDataTestIncstMaskPos() : maskrs(nullptr) {}
-    ~clsRasterDataTestIncstMaskPos() override { delete maskrs; }
-    void SetUp() override {
+    virtual ~clsRasterDataTestIncstMaskPos() { delete maskrs; }
+    virtual void SetUp() {
         maskrs = clsRasterData<int>::Init(GetParam());  // recommended way
         //maskrs = new clsRasterData<float>(GetParam());  // unsafe way
         ASSERT_NE(nullptr, maskrs);
     }
-    void TearDown() override {
+    virtual void TearDown() {
         delete maskrs;
         maskrs = nullptr;
     }
@@ -116,13 +116,13 @@ TEST_P(clsRasterDataTestIncstMaskPos, RasterIO) {
         }
     }
     /// output array to raster file and destructor the clsRasterData instance immediately
-    clsRasterData<float, int>* new1draster = new clsRasterData<float, int>(maskrs, vs);
+    clsRasterData<float, int> *new1draster = new clsRasterData<float, int>(maskrs, vs);
     string oldfullname = maskrs->getFilePath();
     string new1dfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
         "ctor_mask-pos_array_1d" + "." + GetSuffix(oldfullname);
     new1draster->outputToFile(new1dfullname);
 
-    clsRasterData<float, int>* new2draster = new clsRasterData<float, int>(maskrs, vs2, 3);
+    clsRasterData<float, int> *new2draster = new clsRasterData<float, int>(maskrs, vs2, 3);
     string new2dfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
         "ctor_mask-pos_array_2d" + "." + GetSuffix(oldfullname);
     new2draster->outputToFile(new2dfullname);

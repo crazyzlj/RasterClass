@@ -119,6 +119,16 @@ inline bool _check_raster_files_exist(vector<string> &filenames) {
     return true;
 }
 
+template<typename T1, typename T2>
+inline void _get_data_from_gdal(T1 *dst, T2 *src, int nr, int nc) {
+#pragma omp parallel for
+    for (int i = 0; i < nr; ++i) {
+        for (int j = 0; j < nc; ++j) {
+            int index = i * nc + j;
+            dst[index] = (T1)src[index];
+        }
+    }
+}
 /*!
  * \class clsRasterData
  * \ingroup data
@@ -196,12 +206,12 @@ public:
     /*!
      * \brief Construct an clsRasterData instance by 1D array data and mask
      */
-    clsRasterData(clsRasterData<MaskT> *mask, T *&values);
+    clsRasterData(clsRasterData<MaskT> *mask, const T *values);
 
     /*!
      * \brief Construct an clsRasterData instance by 2D array data and mask
      */
-    clsRasterData(clsRasterData<MaskT> *mask, T **&values, int lyrs);
+    clsRasterData(clsRasterData<MaskT> *mask, const T * const *values, int lyrs);
 
 #ifdef USE_MONGODB
 
@@ -592,7 +602,7 @@ public:
     inline bool validate_row_col(int row, int col) {
         if ((row < 0 || row >= this->getRows()) || (col < 0 || col >= this->getCols())) {
             print_status("The row must between 0 and " + ValueToString(this->getRows() - 1) +
-                         ", and the col must between 0 and " + ValueToString(this->getCols() - 1));
+                ", and the col must between 0 and " + ValueToString(this->getCols() - 1));
             return false;
         } else { return true; }
     }
@@ -727,7 +737,7 @@ private:
      * \param[in] filename \a string, output ASC file path
      * \param[in] header header information
      */
-    void _write_ASC_headers(string filename, map<string, double> &header);
+    bool _write_ASC_headers(string filename, map<string, double> &header);
 
     /*!
      * \brief Write single geotiff file
@@ -958,6 +968,7 @@ clsRasterData<T, MaskT>::clsRasterData(vector<string> &filenames,
                 this->_read_raster_file_by_gdal(curfilename, &tmpheader, &tmplyrdata, &m_srs);
             }
             if (m_calcPositions) {
+#pragma omp parallel for
                 for (int i = 0; i < m_nCells; ++i) {
                     int tmpRow = m_rasterPositionData[i][0];
                     int tmpCol = m_rasterPositionData[i][1];
@@ -965,8 +976,9 @@ clsRasterData<T, MaskT>::clsRasterData(vector<string> &filenames,
                                                        tmpheader, tmplyrdata);
                 }
             } else {
-                for (int i = 0; i < m_headers.at(HEADER_RS_NROWS); ++i) {
-                    for (int j = 0; j < m_headers.at(HEADER_RS_NCOLS); ++j) {
+#pragma omp parallel for
+                for (int i = 0; i < (int) m_headers.at(HEADER_RS_NROWS); ++i) {
+                    for (int j = 0; j < (int) m_headers.at(HEADER_RS_NCOLS); ++j) {
                         this->_add_other_layer_raster_data(i, j, i * (int) m_headers.at(HEADER_RS_NCOLS) + j,
                                                            (int) fileidx, tmpheader, tmplyrdata);
                     }
@@ -1001,13 +1013,14 @@ clsRasterData<T, MaskT> *clsRasterData<T, MaskT>::Init(vector<string> &filenames
 }
 
 template<typename T, typename MaskT>
-clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, T *&values) {
+clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, const T *values) {
     this->_initialize_raster_class();
     m_mask = mask;
     m_nLyrs = mask->getLayers();
     m_nCells = m_mask->getCellNumber();
     Initialize1DArray(m_nCells, m_rasterData, values); // DO NOT ASSIGN ARRAY DIRECTLY, IN CASE OF MEMORY ERROR!
     this->copyHeader(m_mask->getRasterHeader());
+    m_srs = m_mask->getSRSString();
     m_defaultValue = m_mask->getDefaultValue();
     m_calcPositions = false;
     if (mask->PositionsCalculated()) {
@@ -1017,7 +1030,7 @@ clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, T *&values) {
 }
 
 template<typename T, typename MaskT>
-clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, T **&values, int lyrs) {
+clsRasterData<T, MaskT>::clsRasterData(clsRasterData<MaskT> *mask, const T * const *values, int lyrs) {
     this->_initialize_raster_class();
     m_mask = mask;
     m_nLyrs = lyrs;
@@ -1158,7 +1171,7 @@ double clsRasterData<T, MaskT>::getStatistics(string sindex, int lyr /* = 1 */) 
     {
         map<string, double *>::iterator it = m_statsMap2D.find(sindex);
         if (it != m_statsMap2D.end()) {
-            if (nullptr == it->second || m_statisticsCalculated) {
+            if (nullptr == it->second) {
                 m_statisticsCalculated = false;
                 this->calculateStatistics();
             }
@@ -1350,8 +1363,7 @@ T clsRasterData<T, MaskT>::getValue(int row, int col, int lyr /* = 1 */) {
         int validCellIndex = this->getPosition(row, col);
         if (validCellIndex < 0) return m_noDataValue;  // error or NODATA
         return this->getValueByIndex(validCellIndex, lyr);
-    } else  // get data directly from row and col
-    {
+    } else { // get data directly from row and col
         if (m_is2DRaster) {
             return m_raster2DData[row * this->getCols() + col][lyr - 1];
         } else {
@@ -1382,8 +1394,7 @@ void clsRasterData<T, MaskT>::getValue(int row, int col, int *nLyrs, T **values)
             *values = cellValues;  // NODATA
             return;
         } else { return this->getValueByIndex(validCellIndex, nLyrs, values); }
-    } else  // get data directly from row and col
-    {
+    } else { // get data directly from row and col
         if (m_is2DRaster) {
             T *cellValues = new T[m_nLyrs];
             for (int i = 0; i < m_nLyrs; i++) {
@@ -1423,6 +1434,8 @@ void clsRasterData<T, MaskT>::setValue(int row, int col, T value, int lyr /* = 1
 
 template<typename T, typename MaskT>
 bool clsRasterData<T, MaskT>::outputToFile(string filename) {
+    if (GetPathFromFullName(filename) == "") return false;
+    filename = GetAbsolutePath(filename);
     if (!this->validate_raster_data()) return false;
     string filetype = GetUpper(GetSuffix(filename));
     if (StringMatch(filetype, ASCIIExtension)) {
@@ -1435,9 +1448,13 @@ bool clsRasterData<T, MaskT>::outputToFile(string filename) {
 }
 
 template<typename T, typename MaskT>
-void clsRasterData<T, MaskT>::_write_ASC_headers(string filename, map<string, double> &header) {
+bool clsRasterData<T, MaskT>::_write_ASC_headers(string filename, map<string, double> &header) {
     DeleteExistedFile(filename);
     ofstream rasterFile(filename.c_str(), ios::app | ios::out);
+    if (!rasterFile.is_open()) {
+        print_status("Error opening file: " + filename);
+        return false;
+    }
     //write file
     int rows = int(header.at(HEADER_RS_NROWS));
     int cols = int(header.at(HEADER_RS_NCOLS));
@@ -1449,10 +1466,12 @@ void clsRasterData<T, MaskT>::_write_ASC_headers(string filename, map<string, do
     rasterFile << HEADER_RS_CELLSIZE << " " << (float) header.at(HEADER_RS_CELLSIZE) << endl;
     rasterFile << HEADER_RS_NODATA << " " << setprecision(6) << header.at(HEADER_RS_NODATA) << endl;
     rasterFile.close();
+    return true;
 }
 
 template<typename T, typename MaskT>
 bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
+    filename = GetAbsolutePath(filename);
     /// 1. Is there need to calculate valid position index?
     int count;
     int **position = nullptr;
@@ -1463,7 +1482,9 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
         assert(nullptr != position);
     }
     /// 2. Write ASC raster headers first (for 1D raster data only)
-    if (!m_is2DRaster) this->_write_ASC_headers(filename, m_headers);
+    if (!m_is2DRaster) {
+        if (!this->_write_ASC_headers(filename, m_headers)) return false;
+    }
     /// 3. Begin to write raster data
     int rows = int(m_headers.at(HEADER_RS_NROWS));
     int cols = int(m_headers.at(HEADER_RS_NCOLS));
@@ -1471,12 +1492,13 @@ bool clsRasterData<T, MaskT>::outputASCFile(string filename) {
     /// 3.1 2D raster data
     if (m_is2DRaster) {
         string prePath = GetPathFromFullName(filename);
+        if (StringMatch(prePath, "")) return false;
         string coreName = GetCoreFileName(filename);
         for (int lyr = 0; lyr < m_nLyrs; lyr++) {
             stringstream oss;
             oss << prePath << coreName << "_" << (lyr + 1) << "." << ASCIIExtension;
             string tmpfilename = oss.str();
-            this->_write_ASC_headers(tmpfilename, m_headers);
+            if (!this->_write_ASC_headers(tmpfilename, m_headers)) return false;
             // write data
             ofstream rasterFile(tmpfilename.c_str(), ios::app | ios::out);
             if (!rasterFile.is_open()) {
@@ -1563,6 +1585,7 @@ bool clsRasterData<T, MaskT>::_write_single_geotiff(string filename,
 
 template<typename T, typename MaskT>
 bool clsRasterData<T, MaskT>::outputFileByGDAL(string filename) {
+    filename = GetAbsolutePath(filename);
     /// 1. Is there need to calculate valid position index?
     int count;
     int **position = nullptr;
@@ -1667,21 +1690,21 @@ void clsRasterData<T, MaskT>::outputToMongoDB(string filename, MongoGridFS *gfs)
         datalength = nRows * nCols * m_nLyrs;
         Initialize1DArray(datalength, rasterdata1D, noDataValue);
         int countindex = 0;
-        int rowcolindex = 0;
-        int dataIndex = 0;
         for (int i = 0; i < nRows; ++i) {
             for (int j = 0; j < nCols; ++j) {
-                rowcolindex = i * nCols + j;
-                for (int k = 0; k < m_nLyrs; k++) {
-                    dataIndex = i * nCols * m_nLyrs + j * m_nLyrs + k;
-                    if (outputdirectly) {
-                        rasterdata1D[dataIndex] = m_raster2DData[rowcolindex][k];
-                        continue;
+                int rowcolindex = i * nCols + j;
+                int dataIndex = i * nCols * m_nLyrs + j * m_nLyrs;
+                if (outputdirectly) {
+                    for (int k = 0; k < m_nLyrs; k++) {
+                        rasterdata1D[dataIndex + k] = m_raster2DData[rowcolindex][k];
                     }
-                    if (countindex < m_nCells && (position[countindex][0] == i && position[countindex][1] == j)) {
-                        rasterdata1D[dataIndex] = m_raster2DData[countindex][k];
-                        countindex++;
+                    continue;
+                }
+                if (countindex < m_nCells && (position[countindex][0] == i && position[countindex][1] == j)) {
+                    for (int k = 0; k < m_nLyrs; k++) {
+                        rasterdata1D[dataIndex + k] = m_raster2DData[countindex][k];
                     }
+                    countindex++;
                 }
             }
         }
@@ -1699,7 +1722,6 @@ void clsRasterData<T, MaskT>::outputToMongoDB(string filename, MongoGridFS *gfs)
             for (int i = 0; i < nRows; ++i) {
                 for (int j = 0; j < nCols; ++j) {
                     int index = i * nCols + j;
-
                     if (validnum < m_nCells && (position[validnum][0] == i && position[validnum][1] == j)) {
                         rasterdata1D[index] = m_rasterData[validnum];
                         validnum++;
@@ -1770,45 +1792,48 @@ bool clsRasterData<T, MaskT>::ReadFromMongoDB(MongoGridFS *gfs,
 
     int nRows = (int) m_headers.at(HEADER_RS_NROWS);
     int nCols = (int) m_headers.at(HEADER_RS_NCOLS);
+    m_nCells = nRows * nCols;
     m_noDataValue = (T) m_headers.at(HEADER_RS_NODATA);
     m_nLyrs = (int) m_headers.at(HEADER_RS_LAYERS);
-    if (m_headers.find(HEADER_RS_CELLSNUM) != m_headers.end()) {
-        m_nCells = (int) m_headers.at(HEADER_RS_CELLSNUM);
-    }
-    /// TODO (by LJ), currently data stored in MongoDB is always float. I can not find a elegant way to make it template.
-    if (m_nCells < 0) {
-        m_nCells = length / sizeof(float) / m_nLyrs;
-    }
 
+    /// TODO (by LJ), currently data stored in MongoDB is always float.
+    ///  I can not find an elegant way to make it templated.
+    assert(m_nCells == length / sizeof(float) / m_nLyrs);
+
+    int validcount = -1;
+    if (m_headers.find(HEADER_RS_CELLSNUM) != m_headers.end()) {
+        validcount = (int) m_headers.at(HEADER_RS_CELLSNUM);
+    }
     /// 3. Store data.
-    bool reBuildData = false;
-    /// check data length
-    if (m_nCells != nRows * nCols) {
-        if (nullptr == m_mask) {
-            print_status("When raster stored in MongoDB is not full-sized, mask data must be provided!");
-        }
-        int nValidMaskNumber = m_mask->getCellNumber();
-        if (nValidMaskNumber != m_nCells) {
-            print_status("The cell number must the same between mask and the current raster data.");
-        }
-    } else { reBuildData = true; }
+    /// check the valid values count and determine whether can read directly.
+    bool reBuildData = true;
+    if (validcount != m_nCells && m_calcPositions && m_useMaskExtent &&
+        nullptr != m_mask && validcount == m_mask->getCellNumber()) {
+        reBuildData = false;
+        m_storePositions = false;
+        m_mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
+    }
     /// read data directly
     if (m_nLyrs == 1) {
         float *tmpdata = (float *) buf;
         Initialize1DArray(m_nCells, m_rasterData, m_noDataValue);
 #pragma omp parallel for
         for (int i = 0; i < m_nCells; i++) {
-            m_rasterData[i] = (T) tmpdata[i];
+            int tmpidx = i;
+            if (!reBuildData) tmpidx = m_rasterPositionData[i][0] * this->getCols() + m_rasterPositionData[i][1];
+            m_rasterData[i] = (T) tmpdata[tmpidx];
         }
         Release1DArray(tmpdata);
         m_is2DRaster = false;
     } else {
         float *tmpdata = (float *) buf;
-        m_raster2DData = new T *[m_nCells];
+        Initialize2DArray(m_nCells, m_nLyrs, m_raster2DData, m_noDataValue);
+#pragma omp parallel for
         for (int i = 0; i < m_nCells; i++) {
-            m_raster2DData[i] = new T[m_nLyrs];
+            int tmpidx = i;
+            if (!reBuildData) tmpidx = m_rasterPositionData[i][0] * this->getCols() + m_rasterPositionData[i][1];
             for (int j = 0; j < m_nLyrs; j++) {
-                int idx = i * m_nLyrs + j;
+                int idx = tmpidx * m_nLyrs + j;
                 m_raster2DData[i][j] = (T) tmpdata[idx];
             }
         }
@@ -1819,8 +1844,8 @@ bool clsRasterData<T, MaskT>::ReadFromMongoDB(MongoGridFS *gfs,
     this->_check_default_value();
     if (reBuildData) {
         this->_mask_and_calculate_valid_positions();
-        return true;
-    } else { return false; }
+    }
+    return true;
 }
 
 #endif /* USE_MONGODB */
@@ -1902,68 +1927,76 @@ bool clsRasterData<T, MaskT>::_read_raster_file_by_gdal(string filename, map<str
     }
     T *tmprasterdata = new T[fullsize_nCells];
     GDALDataType dataType = poBand->GetRasterDataType();
-    if (dataType == GDT_Float32) {
-        float *pData = (float *) CPLMalloc(sizeof(float) * nCols * nRows);
-        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, pData, nCols, nRows, GDT_Float32, 0, 0);
-        for (int i = 0; i < nRows; ++i) {
-            for (int j = 0; j < nCols; ++j) {
-                int index = i * nCols + j;
-                tmprasterdata[index] = (T) pData[index];
-            }
+    char *char_data = nullptr;
+    unsigned char *uchar_data = nullptr;
+    unsigned short *ushort_data = nullptr;
+    short *short_data = nullptr;
+    unsigned int *uint_data = nullptr;
+    int *int_data = nullptr;
+    float *float_data = nullptr;
+    double *double_data = nullptr;
+    switch (dataType) {
+    case GDT_Byte:
+        /// For GDAL, GDT_Byte is 8-bit unsigned interger, ranges from 0 to 255.
+        /// However, ArcGIS use 8-bit signed and unsigned intergers which both will be read as GDT_Byte.
+        ///   8-bit signed integer ranges from -128 to 127.
+        /// Since both signed and unsigned integers of n bits in length can represent 2^n different values,
+        ///   there is no inherent way to distinguish signed integers from unsigned integers simply by looking
+        ///   at them; the software designer is responsible for using them correctly.
+        /// So, here I can only assume that a negative nodata indicates a 8-bit signed integer type.
+        if (m_noDataValue < 0) {  // commonly -128
+            char_data = (char *)CPLMalloc(sizeof(char) * nCols * nRows);
+            poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, char_data, nCols, nRows, GDT_Byte, 0, 0);
+            _get_data_from_gdal(tmprasterdata, char_data, nRows, nCols);
+            CPLFree(char_data);
+        } else {  // commonly 255
+            uchar_data = (unsigned char *)CPLMalloc(sizeof(unsigned char) * nCols * nRows);
+            poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, uchar_data, nCols, nRows, GDT_Byte, 0, 0);
+            _get_data_from_gdal(tmprasterdata, uchar_data, nRows, nCols);
+            CPLFree(uchar_data);
         }
-        CPLFree(pData);
-    } else if (dataType == GDT_Int32) {  // 32-bit signed integer
-        //long *pData = (long *) CPLMalloc(sizeof(long) * nCols * nRows);
-        int32_t *pData = (int32_t *) CPLMalloc(sizeof(int32_t) * nCols * nRows);
-        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, pData, nCols, nRows, GDT_Int32, 0, 0);
-        for (int i = 0; i < nRows; ++i) {
-            for (int j = 0; j < nCols; ++j) {
-                int index = i * nCols + j;
-                if (-2147483647 >= pData[index]) {
-                    m_noDataValue = (T) NODATA_VALUE;
-                    tmprasterdata[index] = m_noDataValue;
-                } else { tmprasterdata[index] = (T) pData[index]; }
-            }
-        }
-        CPLFree(pData);
-    } else if (dataType == GDT_Int16) {  // 16-bit signed integer
-        short *pData = (short *) CPLMalloc(sizeof(short) * nCols * nRows);
-        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, pData, nCols, nRows, GDT_Int16, 0, 0);
-        for (int i = 0; i < nRows; ++i) {
-            for (int j = 0; j < nCols; ++j) {
-                int index = i * nCols + j;
-                if (-32767 >= pData[index]) {
-                    m_noDataValue = (T) NODATA_VALUE;
-                    tmprasterdata[index] = m_noDataValue;
-                } else { tmprasterdata[index] = (T) pData[index]; }
-            }
-        }
-        CPLFree(pData);
-    } else if (dataType == GDT_Byte) {  // 8-bit unsigned integer, -128 ~ 127,
-        char *pData = (char *) CPLMalloc(sizeof(char) * nCols * nRows);
-        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, pData, nCols, nRows, GDT_Byte, 0, 0);
-        for (int i = 0; i < nRows; ++i) {
-            for (int j = 0; j < nCols; ++j) {
-                int index = i * nCols + j;
-                if (-128 >= pData[index]) {
-                    m_noDataValue = (T) NODATA_VALUE;
-                    tmprasterdata[index] = m_noDataValue;
-                } else { tmprasterdata[index] = (T) pData[index]; }
-            }
-        }
-        CPLFree(pData);
-    } else { // others
-        double *pData = (double *) CPLMalloc(sizeof(double) * nCols * nRows);
-        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, pData, nCols, nRows, GDT_Float64, 0, 0);
-        for (int i = 0; i < nRows; ++i) {
-            for (int j = 0; j < nCols; ++j) {
-                int index = i * nCols + j;
-                tmprasterdata[index] = (T) pData[index];
-            }
-        }
+        break;
+    case GDT_UInt16:
+        ushort_data = (unsigned short *)CPLMalloc(sizeof(unsigned short) * nCols * nRows);
+        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, ushort_data, nCols, nRows, GDT_UInt16, 0, 0);
+        _get_data_from_gdal(tmprasterdata, ushort_data, nRows, nCols);
+        CPLFree(ushort_data);
+        break;
+    case GDT_Int16:
+        short_data = (short *)CPLMalloc(sizeof(short) * nCols * nRows);
+        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, short_data, nCols, nRows, GDT_Int16, 0, 0);
+        _get_data_from_gdal(tmprasterdata, short_data, nRows, nCols);
+        CPLFree(short_data);
+        break;
+    case GDT_UInt32:
+        uint_data = (unsigned int *)CPLMalloc(sizeof(unsigned int) * nCols * nRows);
+        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, uint_data, nCols, nRows, GDT_UInt32, 0, 0);
+        _get_data_from_gdal(tmprasterdata, uint_data, nRows, nCols);
+        CPLFree(uint_data);
+        break;
+    case GDT_Int32:
+        int_data = (int *)CPLMalloc(sizeof(int) * nCols * nRows);
+        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, int_data, nCols, nRows, GDT_Int32, 0, 0);
+        _get_data_from_gdal(tmprasterdata, int_data, nRows, nCols);
+        CPLFree(int_data);
+        break;
+    case GDT_Float32:
+        float_data = (float *)CPLMalloc(sizeof(float) * nCols * nRows);
+        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, float_data, nCols, nRows, GDT_Float32, 0, 0);
+        _get_data_from_gdal(tmprasterdata, float_data, nRows, nCols);
+        CPLFree(float_data);
+        break;
+    case GDT_Float64:
+        double_data = (double *)CPLMalloc(sizeof(double) * nCols * nRows);
+        poBand->RasterIO(GF_Read, 0, 0, nCols, nRows, double_data, nCols, nRows, GDT_Float64, 0, 0);
+        _get_data_from_gdal(tmprasterdata, double_data, nRows, nCols);
+        CPLFree(double_data);
+        break;
+    default:
+        cout << "Unexpected GDALDataType: " << GDALGetDataTypeName(dataType) << endl;
+        exit(-1);
     }
     GDALClose(poDataset);
-
     /// returned parameters
     *header = tmpheader;
     *values = tmprasterdata;
@@ -2178,8 +2211,6 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
     }
     vector<int>(positionRows).swap(positionRows);
     vector<int>(positionCols).swap(positionCols);
-    // positionRows.shrink_to_fit();
-    // positionCols.shrink_to_fit();
     /// reCreate raster data array
     m_nCells = (int) values.size();
     m_headers.at(HEADER_RS_CELLSNUM) = m_nCells;
@@ -2195,6 +2226,7 @@ void clsRasterData<T, MaskT>::_calculate_valid_positions_from_grid_data() {
     //m_rasterPositionData = new int *[m_nCells];
     Initialize2DArray(m_nCells, 2, m_rasterPositionData, 0);
     m_storePositions = true;
+#pragma omp parallel for
     for (int i = 0; i < m_nCells; ++i) {
         if (m_is2DRaster) {
             m_raster2DData[i][0] = values.at(i);
@@ -2238,23 +2270,8 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
     int maskRows = m_mask->getRows();
     int maskCols = m_mask->getCols();
     int maskCells = maskRows * maskCols;
-    if (m_mask->PositionsCalculated()) { /// Get the position data from mask
-        m_mask->getRasterPositionData(&nValidMaskNumber, &validPosition);
-    } else {  /// Calculate position data of mask raster
-        nValidMaskNumber = 0;
-        Initialize2DArray(maskCells, 2, validPosition, -1);
-        for (int i = 0; i < maskRows; ++i) {
-            for (int j = 0; j < maskCols; ++j) { /// check mask nodata
-                if (FloatEqual(m_mask->getValue(i, j), m_mask->getNoDataValue())) { continue; }
-                else {
-                    validPosition[nValidMaskNumber][0] = i;
-                    validPosition[nValidMaskNumber][1] = j;
-                    nValidMaskNumber++;
-                }
-            }
-        }
-    }
-
+    /// Get the position data from mask
+    m_mask->getRasterPositionData(&nValidMaskNumber, &validPosition);
     /// calculate the interect extent between mask and the raster data
     int max_row = -1;
     int min_row = maskRows;
@@ -2315,14 +2332,11 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
         for (typename vector<vector<T> >::iterator iter = values2D.begin();
              iter != values2D.end(); iter++) {
             vector<T>(*iter).swap(*iter);
-            assert((*iter).size() == values.size());
         }
+        assert(values2D.size() == values.size());
     }
     vector<int>(positionRows).swap(positionRows);
     vector<int>(positionCols).swap(positionCols);
-    //values.shrink_to_fit();
-    //positionRows.shrink_to_fit();
-    //positionCols.shrink_to_fit();
     assert(values.size() == positionRows.size());
     assert(values.size() == positionCols.size());
 
@@ -2339,8 +2353,8 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
     /// 2.2a Copy header of mask data
     this->copyHeader(m_mask->getRasterHeader());
     /// 2.2b  ReCalculate the header based on the mask's header
-    if ((!m_useMaskExtent && !sameExtentWithMask) ||
-        ((m_useMaskExtent || sameExtentWithMask) && m_calcPositions && !m_mask->PositionsCalculated())) {
+    if (!m_useMaskExtent && !sameExtentWithMask) {
+        // ||((m_useMaskExtent || sameExtentWithMask) && m_calcPositions && !m_mask->PositionsCalculated())) {
         m_headers.at(HEADER_RS_NCOLS) = double(newCols);
         m_headers.at(HEADER_RS_NROWS) = double(newRows);
         m_headers.at(HEADER_RS_XLL) += min_col * m_mask->getCellWidth();
@@ -2383,22 +2397,19 @@ void clsRasterData<T, MaskT>::_mask_and_calculate_valid_positions() {
         }
         vector<int>(positionRows).swap(positionRows);
         vector<int>(positionCols).swap(positionCols);
-        // positionRows.shrink_to_fit();
-        // positionCols.shrink_to_fit();
     }
-    /// 2.3 Handling NoData and SRS
+    /// 2.3 Handling NoData, SRS, and Layers
     m_headers.at(HEADER_RS_NODATA) = m_noDataValue;  /// avoid to assign the Mask's NODATA
     m_srs = string(m_mask->getSRS());  /// use the coordinate system of mask data
-
+    m_headers.at(HEADER_RS_LAYERS) = m_nLyrs;
     /// 3. Create new raster data, and handling positions data
     /// 3.1 Determine the m_nCells, and whether to allocate new position data space
     bool store_fullsize_array = false;
-    if ((m_useMaskExtent || sameExtentWithMask) && m_calcPositions &&
-        m_mask->PositionsCalculated()) {  // assign position data pointer of mask data
+    if ((m_useMaskExtent || sameExtentWithMask) && m_calcPositions) {
         m_mask->getRasterPositionData(&m_nCells, &m_rasterPositionData);
         m_storePositions = false;
     } else if ((!m_useMaskExtent && !sameExtentWithMask && !m_calcPositions) ||
-               ((m_useMaskExtent || sameExtentWithMask) && !m_calcPositions)) {
+        ((m_useMaskExtent || sameExtentWithMask) && !m_calcPositions)) {
         // reStore raster values as fullsize array
         m_nCells = this->getCols() * this->getRows();
         store_fullsize_array = true;

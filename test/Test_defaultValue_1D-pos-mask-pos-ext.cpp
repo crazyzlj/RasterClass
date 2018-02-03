@@ -52,8 +52,8 @@ public:
 class clsRasterDataTestWithDefaultValue : public TestWithParam<inputRasterFiles *> {
 public:
     clsRasterDataTestWithDefaultValue() : rs(nullptr), maskrs(nullptr) {}
-    ~clsRasterDataTestWithDefaultValue() override { delete rs; }
-    void SetUp() override {
+    virtual ~clsRasterDataTestWithDefaultValue() { delete rs; }
+    virtual void SetUp() {
         // Read mask data with default parameters, i.e., calculate valid positions.
         maskrs = clsRasterData<int>::Init(GetParam()->mask_name);
         ASSERT_NE(nullptr, maskrs);
@@ -61,7 +61,7 @@ public:
         rs = clsRasterData<int, int>::Init(GetParam()->raster_name, true, maskrs, true, 4);
         ASSERT_NE(nullptr, rs);
     }
-    void TearDown() override {
+    virtual void TearDown() {
         delete rs;
         delete maskrs;
         rs = nullptr;
@@ -79,7 +79,7 @@ TEST_P(clsRasterDataTestWithDefaultValue, RasterIO) {
     EXPECT_EQ(73, rs->getDataLength());  // m_nCells, which is the same as the extent of mask data
     EXPECT_EQ(73, rs->getCellNumber());  // m_nCells
 
-    EXPECT_EQ(-9999, rs->getNoDataValue());  // m_noDataValue
+    EXPECT_EQ(-2147483647, rs->getNoDataValue());  // m_noDataValue
     EXPECT_EQ(4, rs->getDefaultValue());  // m_defaultValue
 
     // m_filePathName depends on the path of build, so no need to test.

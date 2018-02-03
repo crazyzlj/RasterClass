@@ -55,8 +55,8 @@ public:
 class clsRasterDataTestPosIncstMaskPosExt : public TestWithParam<inputRasterFiles *> {
 public:
     clsRasterDataTestPosIncstMaskPosExt() : rs(nullptr), maskrs(nullptr) {}
-    ~clsRasterDataTestPosIncstMaskPosExt() override { delete rs; }
-    void SetUp() override {
+    virtual ~clsRasterDataTestPosIncstMaskPosExt() { delete rs; }
+    virtual void SetUp() {
         // Read mask data with default parameters, i.e., calculate valid positions.
         maskrs = clsRasterData<int>::Init(GetParam()->mask_name);
         ASSERT_NE(nullptr, maskrs);
@@ -64,7 +64,7 @@ public:
         rs = clsRasterData<float, int>::Init(GetParam()->raster_name, true, maskrs);
         ASSERT_NE(nullptr, rs);
     }
-    void TearDown() override {
+    virtual void TearDown() {
         delete rs;
         delete maskrs;
         rs = nullptr;
@@ -123,7 +123,6 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
     EXPECT_FLOAT_EQ(11.52952953f, rs->getSTD());
     EXPECT_FLOAT_EQ(91.42f, rs->getRange());
     EXPECT_TRUE(rs->StatisticsCalculated());
-
 
     EXPECT_NE(nullptr, rs->getMask());  // m_mask
 
@@ -222,11 +221,13 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
     EXPECT_FALSE(rs->outputToFile(fakefullname));
     string newfullname = GetPathFromFullName(oldfullname) + "result" + SEP +
         newcorename + "." + GetSuffix(oldfullname);
+    string newfullname4mongo = GetPathFromFullName(oldfullname) + "result" + SEP +
+        newcorename + "_mongo." + GetSuffix(oldfullname);
     EXPECT_TRUE(rs->outputToFile(newfullname));
     EXPECT_TRUE(FileExists(newfullname));
 
     /** Copy constructor **/
-    clsRasterData<float, int>* copyrs = new clsRasterData<float, int>(rs);
+    clsRasterData<float, int> *copyrs = new clsRasterData<float, int>(rs);
 
     clsRasterData<float, int> copyrs2(rs);
 
@@ -241,22 +242,23 @@ TEST_P(clsRasterDataTestPosIncstMaskPosExt, RasterIO) {
 
 #ifdef USE_MONGODB
     /** MongoDB I/O test **/
-    MongoClient* conn = MongoClient::Init("127.0.0.1", 27017);
+    MongoClient *conn = MongoClient::Init("127.0.0.1", 27017);
     ASSERT_NE(nullptr, conn);
-    string gfsfilename = "dem1d_" + GetSuffix(oldfullname);
-    MongoGridFS* gfs = new MongoGridFS(conn->getGridFS("test", "spatial"));
+    string gfsfilename = newcorename + "_" + GetSuffix(oldfullname);
+    MongoGridFS *gfs = new MongoGridFS(conn->getGridFS("test", "spatial"));
     gfs->removeFile(gfsfilename);
     copyrs->outputToMongoDB(gfsfilename, gfs);
-    clsRasterData<float, int>* mongors = clsRasterData<float, int>::Init(gfs, gfsfilename.c_str(),true,maskrs,true);
+    double stime = TimeCounting();
+    clsRasterData<float, int> *mongors = clsRasterData<float, int>::Init(gfs, gfsfilename.c_str(), true, maskrs, true);
+    cout << "Reading parameter finished, TIMESPAN " << ValueToString(TimeCounting() - stime) << " sec." << endl;
     // test mongors data
     EXPECT_EQ(73, mongors->getCellNumber());  // m_nCells
     EXPECT_EQ(1, mongors->getLayers());
     EXPECT_EQ(60, mongors->getValidNumber());
     EXPECT_FLOAT_EQ(10.10611667f, mongors->getAverage());
-    string newfullname2 = GetPathFromFullName(oldfullname) + "result" + SEP +
-                         newcorename + "_mongo." + GetSuffix(oldfullname);
-    EXPECT_TRUE(rs->outputToFile(newfullname2));
-    EXPECT_TRUE(FileExists(newfullname2));
+    // output to asc/tif file for comparison
+    EXPECT_TRUE(rs->outputToFile(newfullname4mongo));
+    EXPECT_TRUE(FileExists(newfullname4mongo));
 #endif
     delete copyrs;
 }
